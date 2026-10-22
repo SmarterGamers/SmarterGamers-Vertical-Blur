@@ -2,7 +2,7 @@
 ; ####################################################################
 
 #define MyAppName "SmarterGamers Vertical Blur Editor"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "SmarterGamers"
 #define MyAppURL "https://github.com/SmarterGamers/SmarterGamers-Vertical-Blur"
 #define MyAppExeName "SmarterGamersVerticalBlurEditor.exe"

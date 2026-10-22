@@ -37,6 +37,9 @@ venv.bak/
 # Logs & temp
 *.log
 tests/dummy.mp4
+tests/fixtures/
+tests/output/
+release_id.txt
 *.tmp
 
 # OS & IDE

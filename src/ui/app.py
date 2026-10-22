@@ -1,5 +1,13 @@
-"""SmarterGamers Vertical Blur Editor - Desktop Application GUI.
+"""SmarterGamers Vertical Blur Editor - Desktop Application GUI v1.1.0.
+
 Engineered with CustomTkinter for high-DPI Windows 10/11 dark aesthetic.
+Features:
+- Native Windows Drag & Drop (windnd)
+- Interactive multi-preset support (9:16 Shorts, 4K, 720p, 1:1 Square, 4:5 Portrait)
+- Live interactive 9:16 preview frame generation with real-time tuning
+- Queue item selection for preview switching
+- Individual queue item removal
+- GPU NVENC/QSV/AMF hardware encoder status pill
 """
 
 import os
@@ -11,11 +19,17 @@ from tkinter import filedialog, messagebox
 from typing import Dict, List, Optional
 
 import customtkinter as ctk
-from PIL import Image, ImageTk
+from PIL import Image
 
 from core.batch_processor import BatchProcessor, JobConfig, RenderJob
 from core.ffmpeg_engine import FFmpegEngine, VideoMetadata
 from ui import theme
+
+try:
+    import windnd
+    HAS_WINDND = True
+except ImportError:
+    HAS_WINDND = False
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("green")
@@ -26,9 +40,9 @@ class App(ctk.CTk):
         super().__init__()
 
         # Window properties
-        self.title("SmarterGamers — 9:16 Vertical Blur Editor (GPU Accelerated)")
-        self.geometry("1100x720")
-        self.minsize(980, 640)
+        self.title("SmarterGamers — Vertical Blur Studio v1.1.0 (GPU Accelerated)")
+        self.geometry("1140x740")
+        self.minsize(1020, 660)
         self.configure(fg_color=theme.BG_DARK)
 
         # Set App Icon
@@ -60,12 +74,29 @@ class App(ctk.CTk):
         self.batch.on_job_finished = self._on_job_finished_threadsafe
         self.batch.on_all_finished = self._on_all_finished_threadsafe
 
+        # Hook Drag and Drop
+        if HAS_WINDND:
+            try:
+                windnd.hook_dropfiles(self, func=self._on_files_dropped)
+            except Exception:
+                pass
+
+    def _on_files_dropped(self, files):
+        valid_paths = []
+        for f in files:
+            p_str = f.decode("utf-8", errors="ignore") if isinstance(f, bytes) else str(f)
+            p = Path(p_str)
+            if p.is_file() and p.suffix.lower() in (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".flv"):
+                valid_paths.append(p)
+
+        if valid_paths:
+            self._queue_paths(valid_paths)
+
     def _build_header(self):
         header = ctk.CTkFrame(self, fg_color=theme.BG_SURFACE, corner_radius=0, height=64)
         header.pack(fill="x", side="top")
         header.pack_propagate(False)
 
-        # Left title & branding
         title_box = ctk.CTkFrame(header, fg_color="transparent")
         title_box.pack(side="left", padx=20, pady=8)
 
@@ -79,18 +110,17 @@ class App(ctk.CTk):
 
         sub_lbl = ctk.CTkLabel(
             title_box,
-            text="9:16 Vertical Blur Studio",
+            text="Vertical Blur Studio v1.1.0",
             font=("Segoe UI", 16, "bold"),
             text_color=theme.TEXT_PRIMARY,
         )
         sub_lbl.pack(anchor="w")
 
-        # Right Hardware encoder pill
         best_enc = self.engine.preferred_encoder
         hw_pill = ctk.CTkFrame(header, fg_color=theme.BG_SURFACE_ALT, border_width=1, border_color=theme.BORDER_COLOR, corner_radius=20)
         hw_pill.pack(side="right", padx=20, pady=12)
 
-        hw_text = f"⚡ {best_enc.name}" if self.engine.ffmpeg_exe else "❌ FFmpeg Not Found"
+        hw_text = f"⚡ {best_enc.name}" if self.engine.ffmpeg_exe else "❌ FFmpeg Missing"
         hw_color = theme.ACCENT_GREEN if "NVENC" in best_enc.name or "GPU" in best_enc.name else theme.ACCENT_CYAN
         if not self.engine.ffmpeg_exe:
             hw_color = theme.STATUS_ERROR
@@ -109,9 +139,8 @@ class App(ctk.CTk):
         body = ctk.CTkFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=16, pady=12)
 
-        # Split into Left Panel (Preview & Filters) and Right Panel (Queue & Settings)
-        body.grid_columnconfigure(0, weight=4, minsize=380)
-        body.grid_columnconfigure(1, weight=6, minsize=540)
+        body.grid_columnconfigure(0, weight=4, minsize=400)
+        body.grid_columnconfigure(1, weight=6, minsize=560)
         body.grid_rowconfigure(0, weight=1)
 
         self._build_left_panel(body)
@@ -121,23 +150,27 @@ class App(ctk.CTk):
         left = ctk.CTkFrame(parent, fg_color=theme.BG_SURFACE, corner_radius=12, border_width=1, border_color=theme.BORDER_COLOR)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=0)
 
-        # Header
         p_hdr = ctk.CTkLabel(left, text="PREVIEW & TUNING", font=theme.FONT_HEADING, text_color=theme.TEXT_PRIMARY)
         p_hdr.pack(anchor="w", padx=16, pady=(14, 8))
 
-        # 9:16 Canvas Container
-        self.preview_container = ctk.CTkFrame(left, fg_color=theme.BG_CARD, corner_radius=8, width=225, height=400, border_width=1, border_color=theme.BORDER_HIGHLIGHT)
+        # Preview Container
+        self.preview_container = ctk.CTkFrame(left, fg_color=theme.BG_CARD, corner_radius=8, width=225, height=380, border_width=1, border_color=theme.BORDER_HIGHLIGHT)
         self.preview_container.pack(pady=4)
         self.preview_container.pack_propagate(False)
 
-        self.preview_label = ctk.CTkLabel(self.preview_container, text="No Video Loaded\n\nAdd clips to preview\nblur & alignment", text_color=theme.TEXT_MUTED, font=theme.FONT_BODY)
+        dnd_hint = "\n(Drag & Drop videos anywhere)" if HAS_WINDND else ""
+        self.preview_label = ctk.CTkLabel(
+            self.preview_container,
+            text=f"No Video Loaded\n\nAdd clips to preview\nblur & alignment{dnd_hint}",
+            text_color=theme.TEXT_MUTED,
+            font=theme.FONT_BODY,
+        )
         self.preview_label.pack(expand=True, fill="both")
 
-        # Controls Container (Scrollable or standard frame)
         ctrls = ctk.CTkFrame(left, fg_color="transparent")
         ctrls.pack(fill="both", expand=True, padx=16, pady=(10, 10))
 
-        # 1. Blur Strength Slider
+        # 1. Blur Strength
         blur_box = ctk.CTkFrame(ctrls, fg_color="transparent")
         blur_box.pack(fill="x", pady=2)
         ctk.CTkLabel(blur_box, text="Blur Radius:", font=theme.FONT_BODY_BOLD, text_color=theme.TEXT_PRIMARY).pack(side="left")
@@ -210,7 +243,6 @@ class App(ctk.CTk):
         right = ctk.CTkFrame(parent, fg_color=theme.BG_SURFACE, corner_radius=12, border_width=1, border_color=theme.BORDER_COLOR)
         right.grid(row=0, column=1, sticky="nsew", padx=(8, 0), pady=0)
 
-        # Toolbar
         tbar = ctk.CTkFrame(right, fg_color="transparent")
         tbar.pack(fill="x", padx=16, pady=(14, 8))
 
@@ -240,45 +272,48 @@ class App(ctk.CTk):
         )
         self.btn_add.pack(side="right")
 
-        # Scrollable Queue List
         self.queue_frame = ctk.CTkScrollableFrame(right, fg_color=theme.BG_CARD, corner_radius=8, border_width=1, border_color=theme.BORDER_COLOR)
         self.queue_frame.pack(fill="both", expand=True, padx=16, pady=4)
 
         self.empty_label = ctk.CTkLabel(
             self.queue_frame,
-            text="No videos in queue.\nClick '+ Add Video Clips…' to select clips to convert.",
+            text="No videos in queue.\nClick '+ Add Video Clips…' or drag and drop videos here.",
             text_color=theme.TEXT_MUTED,
             font=theme.FONT_BODY,
         )
         self.empty_label.pack(pady=40)
 
-        # Queue Items container dictionary: job_id -> widget elements
         self.queue_widgets: Dict[str, Dict] = {}
 
-        # Export & Encoder Settings
+        # Export & Encoder Settings Card
         settings_box = ctk.CTkFrame(right, fg_color=theme.BG_SURFACE_ALT, corner_radius=8, border_width=1, border_color=theme.BORDER_COLOR)
         settings_box.pack(fill="x", padx=16, pady=(10, 8))
 
-        # Resolution & Encoder row
         s_row1 = ctk.CTkFrame(settings_box, fg_color="transparent")
         s_row1.pack(fill="x", padx=12, pady=(10, 4))
 
-        ctk.CTkLabel(s_row1, text="Format:", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY).pack(side="left", padx=(0, 6))
+        ctk.CTkLabel(s_row1, text="Preset:", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY).pack(side="left", padx=(0, 6))
         self.res_menu = ctk.CTkOptionMenu(
             s_row1,
-            values=["1080 × 1920 (9:16 Shorts / TikTok)", "720 × 1280 (Fast Draft)", "2160 × 3840 (4K UHD)"],
+            values=[
+                "9:16 Shorts / TikTok (1080 × 1920)",
+                "9:16 4K Ultra HD (2160 × 3840)",
+                "9:16 720p Fast Draft (720 × 1280)",
+                "1:1 Square Feed (1080 × 1080)",
+                "4:5 Portrait Feed (1080 × 1350)",
+            ],
             font=theme.FONT_SMALL,
-            width=240,
+            width=260,
         )
         self.res_menu.pack(side="left")
 
-        ctk.CTkLabel(s_row1, text="Hardware:", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY).pack(side="left", padx=(14, 6))
+        ctk.CTkLabel(s_row1, text="Encoder:", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY).pack(side="left", padx=(14, 6))
         enc_names = [f"{e.name}" for e in self.engine.available_encoders]
         self.enc_menu = ctk.CTkOptionMenu(
             s_row1,
             values=enc_names,
             font=theme.FONT_SMALL,
-            width=220,
+            width=210,
         )
         self.enc_menu.pack(side="left")
 
@@ -316,7 +351,6 @@ class App(ctk.CTk):
         inner = ctk.CTkFrame(footer, fg_color="transparent")
         inner.pack(fill="both", expand=True, padx=20, pady=10)
 
-        # Status & Progress Area
         left_status = ctk.CTkFrame(inner, fg_color="transparent")
         left_status.pack(side="left", fill="x", expand=True)
 
@@ -333,7 +367,6 @@ class App(ctk.CTk):
         self.progress_bar.set(0)
         self.progress_bar.pack(fill="x", pady=(4, 0))
 
-        # Action Buttons
         self.btn_open_folder = ctk.CTkButton(
             inner,
             text="Open Folder",
@@ -382,8 +415,11 @@ class App(ctk.CTk):
             target_w, target_h = 720, 1280
         elif "2160" in res_str:
             target_w, target_h = 2160, 3840
+        elif "Square" in res_str:
+            target_w, target_h = 1080, 1080
+        elif "Portrait" in res_str:
+            target_w, target_h = 1080, 1350
 
-        # Selected Encoder
         enc_choice = self.enc_menu.get()
         selected_enc = self.engine.preferred_encoder.encoder_id
         for e in self.engine.available_encoders:
@@ -415,7 +451,7 @@ class App(ctk.CTk):
             return
         if self._preview_timer:
             self.after_cancel(self._preview_timer)
-        self._preview_timer = self.after(300, self._render_preview)
+        self._preview_timer = self.after(250, self._render_preview)
 
     def _render_preview(self):
         if not self.preview_job:
@@ -451,13 +487,13 @@ class App(ctk.CTk):
                 ("All Files", "*.*"),
             ],
         )
-        if not paths:
-            return
+        if paths:
+            self._queue_paths([Path(p) for p in paths])
 
+    def _queue_paths(self, paths: List[Path]):
         cfg = self._get_current_job_config()
-        new_jobs = self.batch.add_files([Path(p) for p in paths], cfg)
+        new_jobs = self.batch.add_files(paths, cfg)
 
-        # Set first job as preview target if none
         if not self.preview_job and new_jobs:
             self.preview_job = new_jobs[0]
             self._render_preview()
@@ -482,7 +518,6 @@ class App(ctk.CTk):
             self.btn_convert.configure(text="Stopping...", state="disabled")
             return
 
-        # Update configs on pending jobs
         cfg = self._get_current_job_config()
         for j in self.batch.queue:
             if j.status == "pending":
@@ -504,7 +539,6 @@ class App(ctk.CTk):
             except Exception:
                 pass
 
-    # Threadsafe callbacks
     def _on_queue_updated_threadsafe(self):
         self.after(0, self._render_queue_ui)
 
@@ -518,15 +552,15 @@ class App(ctk.CTk):
         self.after(0, self._on_batch_complete_ui, success_count, error_count)
 
     def _render_queue_ui(self):
-        # Clean up existing widgets
         for wid in self.queue_frame.winfo_children():
             wid.destroy()
         self.queue_widgets.clear()
 
         if not self.batch.queue:
+            dnd_hint = "\n(Drag and Drop video files directly here)" if HAS_WINDND else ""
             self.empty_label = ctk.CTkLabel(
                 self.queue_frame,
-                text="No videos in queue.\nClick '+ Add Video Clips…' to select clips to convert.",
+                text=f"No videos in queue.\nClick '+ Add Video Clips…'{dnd_hint}",
                 text_color=theme.TEXT_MUTED,
                 font=theme.FONT_BODY,
             )
@@ -541,8 +575,32 @@ class App(ctk.CTk):
             top_row = ctk.CTkFrame(card, fg_color="transparent")
             top_row.pack(fill="x", padx=10, pady=(6, 2))
 
-            name_lbl = ctk.CTkLabel(top_row, text=job.src_path.name, font=theme.FONT_BODY_BOLD, text_color=theme.TEXT_PRIMARY)
-            name_lbl.pack(side="left")
+            # Clickable title to switch preview
+            name_lbl = ctk.CTkButton(
+                top_row,
+                text=job.src_path.name,
+                font=theme.FONT_BODY_BOLD,
+                text_color=theme.TEXT_PRIMARY,
+                fg_color="transparent",
+                hover_color=theme.BG_SURFACE,
+                anchor="w",
+                command=lambda j=job: self._select_preview_job(j),
+            )
+            name_lbl.pack(side="left", fill="x", expand=True)
+
+            # Delete button
+            del_btn = ctk.CTkButton(
+                top_row,
+                text="✕",
+                font=("Segoe UI", 10, "bold"),
+                width=24,
+                height=22,
+                fg_color="transparent",
+                hover_color=theme.STATUS_ERROR,
+                text_color=theme.TEXT_MUTED,
+                command=lambda jid=job.id: self.batch.remove_job(jid),
+            )
+            del_btn.pack(side="right", padx=(6, 0))
 
             status_pill = ctk.CTkLabel(
                 top_row,
@@ -557,7 +615,7 @@ class App(ctk.CTk):
 
             res_txt = f"{job.metadata.width}×{job.metadata.height}" if job.metadata else "Unknown"
             dur_txt = f"{int(job.metadata.duration_sec)}s" if job.metadata else ""
-            meta_lbl = ctk.CTkLabel(info_row, text=f"{res_txt} • {dur_txt} → 9:16 Short", font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED)
+            meta_lbl = ctk.CTkLabel(info_row, text=f"{res_txt} • {dur_txt}", font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED)
             meta_lbl.pack(side="left")
 
             prog_lbl = ctk.CTkLabel(info_row, text=f"{job.progress:.0f}%", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY)
@@ -572,6 +630,10 @@ class App(ctk.CTk):
                 "prog_lbl": prog_lbl,
                 "bar": bar,
             }
+
+    def _select_preview_job(self, job: RenderJob):
+        self.preview_job = job
+        self._render_preview()
 
     def _format_status_badge(self, job: RenderJob) -> str:
         if job.status == "pending":
@@ -606,7 +668,6 @@ class App(ctk.CTk):
             w["prog_lbl"].configure(text=f"{job.progress:.0f}%")
             w["bar"].set(job.progress / 100.0)
 
-        # Update overall footer progress
         total = len(self.batch.queue)
         completed = sum(1 for j in self.batch.queue if j.status == "completed")
         current_active = next((j for j in self.batch.queue if j.status == "processing"), None)

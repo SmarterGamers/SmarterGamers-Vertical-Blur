@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
 RELEASES = DIST / "releases"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 ISCC_PATHS = [
     Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Inno Setup 6" / "iscc.exe",
@@ -60,6 +60,7 @@ def build_pyinstaller():
         "--icon", str(ROOT / "assets" / "app_icon.ico"),
         "--collect-all", "customtkinter",
         "--collect-all", "imageio_ffmpeg",
+        "--collect-all", "windnd",
         "--add-data", f"{ROOT / 'assets' / 'app_icon.ico'};assets",
         "--add-data", f"{ROOT / 'assets' / 'app_icon.png'};assets",
         str(ROOT / "src" / "main.py"),

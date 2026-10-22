@@ -1,4 +1,4 @@
-"""SmarterGamers Vertical Blur Editor - Main Entrypoint.
+"""SmarterGamers Vertical Blur Editor - Main Entrypoint v1.1.0.
 
 Supports both interactive GUI mode and headless CLI batch automation.
 """
@@ -13,10 +13,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core.ffmpeg_engine import FFmpegEngine
 from core.batch_processor import BatchProcessor, JobConfig
 
+PRESETS = {
+    "shorts": (1080, 1920),
+    "4k": (2160, 3840),
+    "720p": (720, 1280),
+    "square": (1080, 1080),
+    "portrait": (1080, 1350),
+}
+
 
 def run_cli(args):
     print("=" * 60)
-    print(" SmarterGamers — 9:16 Vertical Blur Studio (CLI)")
+    print(" SmarterGamers — Vertical Blur Studio v1.1.0 (CLI)")
     print("=" * 60)
 
     engine = FFmpegEngine()
@@ -30,9 +38,14 @@ def run_cli(args):
     inputs = [Path(p) for p in args.inputs]
     out_dir = Path(args.output_dir) if args.output_dir else None
 
+    target_w = args.width
+    target_h = args.height
+    if args.preset and args.preset in PRESETS:
+        target_w, target_h = PRESETS[args.preset]
+
     config = JobConfig(
-        target_w=args.width,
-        target_h=args.height,
+        target_w=target_w,
+        target_h=target_h,
         blur_strength=args.blur,
         blur_algorithm=args.algorithm,
         dim_factor=args.dim,
@@ -43,7 +56,7 @@ def run_cli(args):
 
     batch = BatchProcessor(engine)
     jobs = batch.add_files(inputs, config)
-    print(f"[*] Queued {len(jobs)} video(s) for rendering.\n")
+    print(f"[*] Queued {len(jobs)} video(s) for rendering [{target_w}x{target_h}].\n")
 
     def on_progress(job):
         sys.stdout.write(f"\r -> {job.src_path.name}: {job.progress:.1f}% ({job.speed_factor})")
@@ -72,14 +85,15 @@ def run_gui():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SmarterGamers Vertical Blur Editor")
+    parser = argparse.ArgumentParser(description="SmarterGamers Vertical Blur Editor v1.1.0")
     parser.add_argument("inputs", nargs="*", help="Video file paths to process (CLI mode)")
+    parser.add_argument("--preset", choices=list(PRESETS.keys()), default="shorts", help="Format preset")
     parser.add_argument("--blur", type=int, default=20, help="Blur radius (5-50)")
     parser.add_argument("--algorithm", choices=["boxblur", "gaussian"], default="boxblur", help="Blur filter algorithm")
     parser.add_argument("--dim", type=float, default=0.70, help="Background contrast factor (0.4 - 1.0)")
     parser.add_argument("--offset", type=int, default=0, help="Vertical offset from center in pixels")
-    parser.add_argument("--width", type=int, default=1080, help="Target width (default: 1080)")
-    parser.add_argument("--height", type=int, default=1920, help="Target height (default: 1920)")
+    parser.add_argument("--width", type=int, default=1080, help="Target width (overridden by preset if specified)")
+    parser.add_argument("--height", type=int, default=1920, help="Target height (overridden by preset if specified)")
     parser.add_argument("--encoder", type=str, default=None, help="Encoder id (e.g. h264_nvenc, libx264)")
     parser.add_argument("-o", "--output-dir", type=str, default=None, help="Output destination folder")
     parser.add_argument("--cli", action="store_true", help="Force headless CLI mode")
