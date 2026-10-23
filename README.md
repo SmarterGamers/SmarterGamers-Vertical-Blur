@@ -134,11 +134,21 @@ pip install -r requirements.txt
 # Run tests
 python tests/test_engine.py
 
-# Launch application
+# Launch application (Modern Studio Mode)
 python src/main.py
+
+# Launch application (Lightweight Classic Mode)
+python src/main.py --classic
 
 # Build portable executable and Windows installer
 python scripts/build_release.py
+`
+
+### 🪟 Windows Launchers
+
+Convenient 1-click batch launchers are included in the repository root:
+- launch_studio.bat: Launches the flagship Creator Studio GUI.
+- launch_classic.bat: Launches the instant-start Classic converter.
 ```
 
 ---

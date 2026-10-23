@@ -1,7 +1,7 @@
 """SmarterGamers Vertical Blur Editor - Main Entrypoint v1.2.0.
 
-Supports both interactive GUI mode and headless CLI batch automation with
-advanced clip trimming, multi-track audio mixing, and volume tuning.
+Supports interactive GUI mode (Modern Studio or Lightweight Classic) and
+headless CLI batch automation with sub-clip trimming and multi-track audio mixing.
 """
 
 import argparse
@@ -89,10 +89,21 @@ def run_cli(args):
     print("\n[DONE] All batch jobs finished.")
 
 
-def run_gui():
-    from ui.app import App
-    app = App()
-    app.mainloop()
+def run_gui(force_classic: bool = False):
+    if not force_classic:
+        try:
+            from ui.app import App
+            app = App()
+            app.mainloop()
+            return
+        except Exception as exc:
+            print(f"[WARN] Failed to launch Modern Studio GUI ({exc}). Falling back to Classic GUI...")
+
+    import tkinter as tk
+    from ui.classic_app import ClassicApp
+    root = tk.Tk()
+    app = ClassicApp(root)
+    root.mainloop()
 
 
 def main():
@@ -113,13 +124,14 @@ def main():
     parser.add_argument("--hwaccel", action="store_true", help="Enable GPU hardware decoding")
     parser.add_argument("-o", "--output-dir", type=str, default=None, help="Output destination folder")
     parser.add_argument("--cli", action="store_true", help="Force headless CLI mode")
+    parser.add_argument("--classic", action="store_true", help="Launch lightweight Classic single-file GUI")
 
     args = parser.parse_args()
 
     if args.cli or len(args.inputs) > 0:
         run_cli(args)
     else:
-        run_gui()
+        run_gui(force_classic=args.classic)
 
 
 if __name__ == "__main__":
