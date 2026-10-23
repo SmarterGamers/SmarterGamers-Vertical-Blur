@@ -1,9 +1,12 @@
-"""SmarterGamers Vertical Blur Editor - Batch Rendering Queue & Worker Engine.
+"""SmarterGamers Vertical Blur Editor - Batch Rendering Queue & Worker Engine v1.2.0.
 
 Features:
 - Multi-file batch queue with individual and overall progress
 - Deadlock-free asynchronous stream reader for FFmpeg stdout/stderr
-- Audio track presence awareness (-an vs -c:a copy)
+- Audio track presence & multi-track downmixing awareness
+- Sub-clip trimming support (start_sec, duration_sec)
+- Volume gain adjustments (+3dB, +6dB, mute)
+- GPU hardware decode acceleration
 - Resilient GPU to CPU auto-fallback on driver or encoder error
 - Threadsafe cancellation and pause/resume
 """
@@ -31,7 +34,11 @@ class JobConfig:
     sharp_scale: float = 1.0
     encoder_id: str = "h264_nvenc"
     quality_preset: str = "balanced"
-    audio_mode: str = "copy"
+    audio_mode: str = "copy"  # "copy", "mix_all", "aac_high", "mute"
+    audio_gain_db: float = 0.0
+    start_sec: Optional[float] = None
+    duration_sec: Optional[float] = None
+    enable_hwaccel: bool = True
     output_dir: Optional[Path] = None
 
 
@@ -75,11 +82,12 @@ class BatchProcessor:
                 if not p.is_file():
                     continue
                 out_dir = config.output_dir if config.output_dir else p.parent
-                dst = out_dir / f"{p.stem}_vertical.mp4"
+                suffix = "_short.mp4" if config.duration_sec else "_vertical.mp4"
+                dst = out_dir / f"{p.stem}{suffix}"
 
                 counter = 1
                 while dst.exists() and dst == p:
-                    dst = out_dir / f"{p.stem}_vertical_{counter}.mp4"
+                    dst = out_dir / f"{p.stem}_{counter}{suffix}"
                     counter += 1
 
                 job_id = f"{p.name}_{time.time()}_{len(self.queue)}"
@@ -165,7 +173,10 @@ class BatchProcessor:
             self.on_all_finished(success_count, error_count)
 
     def _process_job(self, job: RenderJob) -> bool:
+        # Effective duration for progress calculation
         duration = job.metadata.duration_sec if job.metadata and job.metadata.duration_sec > 0 else 60.0
+        if job.config.duration_sec and job.config.duration_sec > 0:
+            duration = min(duration, job.config.duration_sec)
 
         # Primary encoder attempt
         success = self._execute_ffmpeg(job, job.config.encoder_id, duration)
@@ -197,6 +208,8 @@ class BatchProcessor:
 
     def _execute_ffmpeg(self, job: RenderJob, encoder_id: str, duration: float) -> bool:
         has_audio = job.metadata.has_audio if job.metadata else True
+        audio_tracks = job.metadata.audio_tracks_count if job.metadata else 1
+
         cmd = self.engine.build_render_command(
             src=job.src_path,
             dst=job.dst_path,
@@ -211,10 +224,14 @@ class BatchProcessor:
             quality_preset=job.config.quality_preset,
             audio_mode=job.config.audio_mode,
             has_audio=has_audio,
+            audio_tracks_count=audio_tracks,
+            audio_gain_db=job.config.audio_gain_db,
+            start_sec=job.config.start_sec,
+            duration_sec=job.config.duration_sec,
+            enable_hwaccel=job.config.enable_hwaccel,
         )
 
         try:
-            # Deadlock prevention: Start process with stderr piped and drain in separate thread
             p = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,

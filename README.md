@@ -69,10 +69,12 @@ Standard vertical video blur scripts rely on standard FFmpeg `gblur` (Gaussian B
 
 - **⚡ Hardware Accelerated:** Native support for NVIDIA NVENC (`h264_nvenc`, `hevc_nvenc`, `av1_nvenc`), Intel QuickSync (`h264_qsv`), and AMD AMF (`h264_amf`).
 - **🛡️ Resilient Fallback:** If GPU memory or driver limits are exceeded, automatically falls back to CPU `libx264` without crashing.
-- **🖼️ Real-Time 9:16 Preview:** Displays rendered frame composition instantly when tuning sliders.
+- **✂️ Sub-Clip Trimming:** Turn full 5-minute gameplay captures into 15s, 30s, or 60s viral Shorts in one step with instant keyframe fast-seek.
+- **🎙️ Multi-Track Audio Mixing:** Automatically merges separate OBS audio tracks (Game Desktop Audio on Track 1, Microphone on Track 2) into clean stereo.
+- **🔊 Volume Gain & Normalization:** Fine-tune audio levels (-6dB to +6dB) directly in the app before exporting.
+- **🖼️ Real-Time 9:16 Preview Scrubber:** Interactive preview with scrub slider to inspect blur and framing across any scene in the video.
 - **🎯 Vertical HUD Framing:** Shift video vertically (Top HUD Bias, True Center, Bottom Bias) so in-game mini-maps, health bars, and kill-feeds aren't obstructed by TikTok/Shorts UI buttons or captions.
-- **🔊 Lossless Audio Passthrough:** Direct stream copy preserves 100% original uncompressed audio quality without re-encoding delay.
-- **📁 Multi-File Batch Processing:** Add dozens of clips, queue them up, and walk away.
+- **📦 Multi-File Batch Processing & Drag & Drop:** Drag and drop dozens of clips straight from Windows Explorer or OBS, queue them up, and walk away.
 - **🪟 Windows Shell Context Menu:** Right-click any `.mp4`, `.mov`, or `.mkv` directly in Windows Explorer to convert immediately.
 - **💻 Full CLI Interface:** Headless automation for stream clipping bots, OBS recording post-processors, and headless servers.
 
@@ -83,11 +85,14 @@ Standard vertical video blur scripts rely on standard FFmpeg `gblur` (Gaussian B
 You can also use SmarterGamers Vertical Blur directly from the command line or scripts:
 
 ```powershell
-# Convert a single gameplay clip
+# Convert a single gameplay clip with standard 9:16 Shorts preset
 SmarterGamersVerticalBlurEditor.exe "clip.mp4"
 
-# Batch convert multiple clips with custom blur and contrast dimming
-SmarterGamersVerticalBlurEditor.exe --cli --blur 25 --dim 0.65 --algorithm boxblur clip1.mp4 clip2.mp4 -o "C:\Shorts"
+# Trim a 15-second highlight starting at 30s with +3dB audio boost
+SmarterGamersVerticalBlurEditor.exe "clip.mp4" --start 30.0 --duration 15.0 --volume 3.0
+
+# Batch convert multiple clips with custom blur, contrast dimming, and audio mixing
+SmarterGamersVerticalBlurEditor.exe --cli --blur 25 --dim 0.65 --audio-mode mix_all clip1.mp4 clip2.mp4 -o "C:\Shorts"
 
 # Full options
 SmarterGamersVerticalBlurEditor.exe --help
@@ -98,12 +103,18 @@ SmarterGamersVerticalBlurEditor.exe --help
 | Flag | Default | Description |
 | :--- | :--- | :--- |
 | `inputs` | `None` | One or more video files to convert |
+| `--preset` | `shorts` | Format preset (`shorts`, `4k`, `720p`, `square`, `portrait`) |
 | `--blur` | `20` | Blur radius (5 to 50) |
 | `--algorithm` | `boxblur` | Blur engine: `boxblur` (fast) or `gaussian` |
 | `--dim` | `0.70` | Background contrast factor (`0.4` to `1.0`) |
 | `--offset` | `0` | Vertical offset in pixels from center |
-| `--width` | `1080` | Target width (9:16 width) |
-| `--height` | `1920` | Target height (9:16 height) |
+| `--start` | `None` | Sub-clip start time in seconds |
+| `--duration` | `None` | Sub-clip length in seconds (e.g. `15.0`) |
+| `--audio-mode` | `copy` | Audio mode: `copy`, `mix_all`, `aac_high`, `mute` |
+| `--volume` | `0.0` | Audio volume gain in dB (e.g. `3.0` or `-3.0`) |
+| `--hwaccel` | `False` | Enable GPU hardware decode acceleration |
+| `--width` | `1080` | Target width (overridden by preset if specified) |
+| `--height` | `1920` | Target height (overridden by preset if specified) |
 | `--encoder` | `auto` | Force encoder (`h264_nvenc`, `libx264`, etc.) |
 | `-o, --output-dir`| Source Dir | Destination folder for rendered videos |
 | `--cli` | `False` | Force headless mode without opening GUI |

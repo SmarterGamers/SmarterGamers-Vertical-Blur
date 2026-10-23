@@ -1,13 +1,13 @@
-"""SmarterGamers Vertical Blur Editor - Desktop Application GUI v1.1.0.
+"""SmarterGamers Vertical Blur Editor - Desktop Application GUI v1.2.0.
 
 Engineered with CustomTkinter for high-DPI Windows 10/11 dark aesthetic.
 Features:
 - Native Windows Drag & Drop (windnd)
-- Interactive multi-preset support (9:16 Shorts, 4K, 720p, 1:1 Square, 4:5 Portrait)
-- Live interactive 9:16 preview frame generation with real-time tuning
-- Queue item selection for preview switching
-- Individual queue item removal
-- GPU NVENC/QSV/AMF hardware encoder status pill
+- Live interactive 9:16 preview frame generation with real-time scrub slider
+- Sub-clip trimming controls (Start time & Duration presets: 15s, 30s, 60s, Full)
+- Multi-track audio downmixing (Game + Mic) and volume gain tuning (-6dB to +6dB)
+- Universal preset selector (9:16 Shorts, 4K, 720p, 1:1 Square, 4:5 Portrait)
+- Queue card selection for instant preview switching and individual item actions
 """
 
 import os
@@ -40,9 +40,9 @@ class App(ctk.CTk):
         super().__init__()
 
         # Window properties
-        self.title("SmarterGamers — Vertical Blur Studio v1.1.0 (GPU Accelerated)")
-        self.geometry("1140x740")
-        self.minsize(1020, 660)
+        self.title("SmarterGamers — Vertical Blur Studio v1.2.0 (GPU Accelerated)")
+        self.geometry("1180x780")
+        self.minsize(1060, 700)
         self.configure(fg_color=theme.BG_DARK)
 
         # Set App Icon
@@ -62,6 +62,7 @@ class App(ctk.CTk):
         self._preview_timer = None
         self._preview_image_ref = None
         self.selected_output_folder: Optional[Path] = None
+        self.scrub_timestamp: float = 1.0
 
         # Build UI
         self._build_header()
@@ -110,7 +111,7 @@ class App(ctk.CTk):
 
         sub_lbl = ctk.CTkLabel(
             title_box,
-            text="Vertical Blur Studio v1.1.0",
+            text="Vertical Blur Studio v1.2.0",
             font=("Segoe UI", 16, "bold"),
             text_color=theme.TEXT_PRIMARY,
         )
@@ -137,10 +138,10 @@ class App(ctk.CTk):
 
     def _build_main_layout(self):
         body = ctk.CTkFrame(self, fg_color="transparent")
-        body.pack(fill="both", expand=True, padx=16, pady=12)
+        body.pack(fill="both", expand=True, padx=16, pady=10)
 
-        body.grid_columnconfigure(0, weight=4, minsize=400)
-        body.grid_columnconfigure(1, weight=6, minsize=560)
+        body.grid_columnconfigure(0, weight=4, minsize=420)
+        body.grid_columnconfigure(1, weight=6, minsize=580)
         body.grid_rowconfigure(0, weight=1)
 
         self._build_left_panel(body)
@@ -151,11 +152,11 @@ class App(ctk.CTk):
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=0)
 
         p_hdr = ctk.CTkLabel(left, text="PREVIEW & TUNING", font=theme.FONT_HEADING, text_color=theme.TEXT_PRIMARY)
-        p_hdr.pack(anchor="w", padx=16, pady=(14, 8))
+        p_hdr.pack(anchor="w", padx=16, pady=(12, 6))
 
-        # Preview Container
-        self.preview_container = ctk.CTkFrame(left, fg_color=theme.BG_CARD, corner_radius=8, width=225, height=380, border_width=1, border_color=theme.BORDER_HIGHLIGHT)
-        self.preview_container.pack(pady=4)
+        # 9:16 Canvas Container
+        self.preview_container = ctk.CTkFrame(left, fg_color=theme.BG_CARD, corner_radius=8, width=210, height=340, border_width=1, border_color=theme.BORDER_HIGHLIGHT)
+        self.preview_container.pack(pady=2)
         self.preview_container.pack_propagate(False)
 
         dnd_hint = "\n(Drag & Drop videos anywhere)" if HAS_WINDND else ""
@@ -167,18 +168,44 @@ class App(ctk.CTk):
         )
         self.preview_label.pack(expand=True, fill="both")
 
-        ctrls = ctk.CTkFrame(left, fg_color="transparent")
-        ctrls.pack(fill="both", expand=True, padx=16, pady=(10, 10))
+        # Preview Scrubber Bar
+        scrub_box = ctk.CTkFrame(left, fg_color="transparent")
+        scrub_box.pack(fill="x", padx=16, pady=(4, 6))
 
-        # 1. Blur Strength
-        blur_box = ctk.CTkFrame(ctrls, fg_color="transparent")
-        blur_box.pack(fill="x", pady=2)
+        ctk.CTkLabel(scrub_box, text="Scrub:", font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED).pack(side="left")
+        self.scrub_lbl = ctk.CTkLabel(scrub_box, text="0.0s", font=theme.FONT_SMALL, text_color=theme.ACCENT_CYAN)
+        self.scrub_lbl.pack(side="right")
+
+        self.scrub_slider = ctk.CTkSlider(
+            scrub_box,
+            from_=0.0,
+            to=30.0,
+            number_of_steps=60,
+            command=self._on_scrub_changed,
+            button_color=theme.ACCENT_CYAN,
+            progress_color=theme.ACCENT_CYAN,
+            height=14,
+        )
+        self.scrub_slider.set(1.0)
+        self.scrub_slider.pack(fill="x", padx=(6, 6))
+
+        # Tabbed Tuning Section (Blur / Trimming / Audio)
+        tabview = ctk.CTkTabview(left, fg_color=theme.BG_SURFACE_ALT, corner_radius=8)
+        tabview.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+
+        t_blur = tabview.add("Blur & Frame")
+        t_trim = tabview.add("Trim Highlight")
+        t_audio = tabview.add("Audio")
+
+        # --- TAB 1: BLUR & FRAME ---
+        blur_box = ctk.CTkFrame(t_blur, fg_color="transparent")
+        blur_box.pack(fill="x", pady=1)
         ctk.CTkLabel(blur_box, text="Blur Radius:", font=theme.FONT_BODY_BOLD, text_color=theme.TEXT_PRIMARY).pack(side="left")
         self.blur_val_lbl = ctk.CTkLabel(blur_box, text="20", font=theme.FONT_SMALL, text_color=theme.ACCENT_GREEN)
         self.blur_val_lbl.pack(side="right")
 
         self.blur_slider = ctk.CTkSlider(
-            ctrls,
+            t_blur,
             from_=5,
             to=50,
             number_of_steps=45,
@@ -188,33 +215,29 @@ class App(ctk.CTk):
             progress_color=theme.ACCENT_GREEN,
         )
         self.blur_slider.set(20)
-        self.blur_slider.pack(fill="x", pady=(0, 6))
+        self.blur_slider.pack(fill="x", pady=(0, 4))
 
-        # 2. Blur Algorithm Mode
-        mode_box = ctk.CTkFrame(ctrls, fg_color="transparent")
+        mode_box = ctk.CTkFrame(t_blur, fg_color="transparent")
         mode_box.pack(fill="x", pady=2)
-        ctk.CTkLabel(mode_box, text="Blur Engine:", font=theme.FONT_BODY_BOLD, text_color=theme.TEXT_PRIMARY).pack(side="left")
+        ctk.CTkLabel(mode_box, text="Engine:", font=theme.FONT_BODY_BOLD, text_color=theme.TEXT_PRIMARY).pack(side="left")
         self.algo_segment = ctk.CTkSegmentedButton(
             mode_box,
             values=["⚡ Fast BoxBlur (15x)", "Gaussian Blur"],
             command=self._on_filter_changed,
             selected_color=theme.ACCENT_GREEN,
-            selected_hover_color=theme.ACCENT_GREEN_HOVER,
-            unselected_color=theme.BG_SURFACE_ALT,
-            text_color="#ffffff",
+            unselected_color=theme.BG_SURFACE,
         )
         self.algo_segment.set("⚡ Fast BoxBlur (15x)")
         self.algo_segment.pack(side="right")
 
-        # 3. Background Dimming Slider
-        dim_box = ctk.CTkFrame(ctrls, fg_color="transparent")
-        dim_box.pack(fill="x", pady=(6, 2))
-        ctk.CTkLabel(dim_box, text="Background Contrast Dim:", font=theme.FONT_BODY_BOLD, text_color=theme.TEXT_PRIMARY).pack(side="left")
+        dim_box = ctk.CTkFrame(t_blur, fg_color="transparent")
+        dim_box.pack(fill="x", pady=(4, 1))
+        ctk.CTkLabel(dim_box, text="Contrast Dim:", font=theme.FONT_BODY_BOLD, text_color=theme.TEXT_PRIMARY).pack(side="left")
         self.dim_val_lbl = ctk.CTkLabel(dim_box, text="30% Darker", font=theme.FONT_SMALL, text_color=theme.ACCENT_CYAN)
         self.dim_val_lbl.pack(side="right")
 
         self.dim_slider = ctk.CTkSlider(
-            ctrls,
+            t_blur,
             from_=0,
             to=60,
             number_of_steps=60,
@@ -223,28 +246,106 @@ class App(ctk.CTk):
             progress_color=theme.ACCENT_CYAN,
         )
         self.dim_slider.set(30)
-        self.dim_slider.pack(fill="x", pady=(0, 6))
+        self.dim_slider.pack(fill="x", pady=(0, 4))
 
-        # 4. Vertical Alignment (HUD Offset)
-        pos_box = ctk.CTkFrame(ctrls, fg_color="transparent")
-        pos_box.pack(fill="x", pady=(6, 2))
-        ctk.CTkLabel(pos_box, text="Vertical Framing:", font=theme.FONT_BODY_BOLD, text_color=theme.TEXT_PRIMARY).pack(side="left")
+        pos_box = ctk.CTkFrame(t_blur, fg_color="transparent")
+        pos_box.pack(fill="x", pady=2)
+        ctk.CTkLabel(pos_box, text="Framing:", font=theme.FONT_BODY_BOLD, text_color=theme.TEXT_PRIMARY).pack(side="left")
         self.align_segment = ctk.CTkSegmentedButton(
             pos_box,
-            values=["Top (HUD Bias)", "Centered", "Bottom Bias"],
+            values=["Top (HUD)", "Centered", "Bottom"],
             command=self._on_filter_changed,
             selected_color=theme.ACCENT_BLUE,
-            unselected_color=theme.BG_SURFACE_ALT,
+            unselected_color=theme.BG_SURFACE,
         )
         self.align_segment.set("Centered")
         self.align_segment.pack(side="right")
+
+        # --- TAB 2: TRIM HIGHLIGHT ---
+        trim_toggle_row = ctk.CTkFrame(t_trim, fg_color="transparent")
+        trim_toggle_row.pack(fill="x", pady=2)
+        self.trim_switch = ctk.CTkSwitch(
+            trim_toggle_row,
+            text="Enable Sub-Clip Trimming",
+            font=theme.FONT_BODY_BOLD,
+            progress_color=theme.ACCENT_GREEN,
+            command=self._on_trim_switch_toggle,
+        )
+        self.trim_switch.pack(side="left")
+
+        self.trim_controls_frame = ctk.CTkFrame(t_trim, fg_color="transparent")
+        self.trim_controls_frame.pack(fill="x", pady=4)
+
+        start_row = ctk.CTkFrame(self.trim_controls_frame, fg_color="transparent")
+        start_row.pack(fill="x", pady=2)
+        ctk.CTkLabel(start_row, text="Start Time (s):", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY).pack(side="left")
+        self.start_time_entry = ctk.CTkEntry(start_row, width=80, height=26, font=theme.FONT_SMALL)
+        self.start_time_entry.insert(0, "0.0")
+        self.start_time_entry.pack(side="right")
+
+        dur_row = ctk.CTkFrame(self.trim_controls_frame, fg_color="transparent")
+        dur_row.pack(fill="x", pady=2)
+        ctk.CTkLabel(dur_row, text="Duration (s):", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY).pack(side="left")
+        self.duration_entry = ctk.CTkEntry(dur_row, width=80, height=26, font=theme.FONT_SMALL)
+        self.duration_entry.insert(0, "15.0")
+        self.duration_entry.pack(side="right")
+
+        quick_dur_row = ctk.CTkFrame(self.trim_controls_frame, fg_color="transparent")
+        quick_dur_row.pack(fill="x", pady=4)
+        ctk.CTkLabel(quick_dur_row, text="Quick Presets:", font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED).pack(side="left")
+        for q_dur in ["15s", "30s", "60s"]:
+            ctk.CTkButton(
+                quick_dur_row,
+                text=q_dur,
+                width=45,
+                height=22,
+                font=theme.FONT_SMALL,
+                fg_color=theme.BG_SURFACE,
+                hover_color=theme.BORDER_COLOR,
+                command=lambda d=q_dur[:-1]: self._set_quick_duration(d),
+            ).pack(side="left", padx=4)
+
+        # --- TAB 3: AUDIO ---
+        a_row1 = ctk.CTkFrame(t_audio, fg_color="transparent")
+        a_row1.pack(fill="x", pady=2)
+        ctk.CTkLabel(a_row1, text="Audio Track Mode:", font=theme.FONT_BODY_BOLD, text_color=theme.TEXT_PRIMARY).pack(side="left")
+        self.audio_mode_menu = ctk.CTkOptionMenu(
+            a_row1,
+            values=[
+                "Direct Stream Copy (Lossless)",
+                "Mix All Tracks (Game + Mic)",
+                "High Quality AAC (192k)",
+                "Mute Audio",
+            ],
+            width=220,
+            font=theme.FONT_SMALL,
+        )
+        self.audio_mode_menu.pack(side="right")
+
+        a_row2 = ctk.CTkFrame(t_audio, fg_color="transparent")
+        a_row2.pack(fill="x", pady=(8, 2))
+        ctk.CTkLabel(a_row2, text="Volume Boost:", font=theme.FONT_BODY_BOLD, text_color=theme.TEXT_PRIMARY).pack(side="left")
+        self.vol_lbl = ctk.CTkLabel(a_row2, text="0.0 dB", font=theme.FONT_SMALL, text_color=theme.ACCENT_CYAN)
+        self.vol_lbl.pack(side="right")
+
+        self.vol_slider = ctk.CTkSlider(
+            t_audio,
+            from_=-6.0,
+            to=6.0,
+            number_of_steps=24,
+            command=self._on_vol_slider_changed,
+            button_color=theme.ACCENT_CYAN,
+            progress_color=theme.ACCENT_CYAN,
+        )
+        self.vol_slider.set(0.0)
+        self.vol_slider.pack(fill="x", pady=(0, 4))
 
     def _build_right_panel(self, parent):
         right = ctk.CTkFrame(parent, fg_color=theme.BG_SURFACE, corner_radius=12, border_width=1, border_color=theme.BORDER_COLOR)
         right.grid(row=0, column=1, sticky="nsew", padx=(8, 0), pady=0)
 
         tbar = ctk.CTkFrame(right, fg_color="transparent")
-        tbar.pack(fill="x", padx=16, pady=(14, 8))
+        tbar.pack(fill="x", padx=16, pady=(12, 6))
 
         ctk.CTkLabel(tbar, text="BATCH QUEUE", font=theme.FONT_HEADING, text_color=theme.TEXT_PRIMARY).pack(side="left")
 
@@ -287,10 +388,10 @@ class App(ctk.CTk):
 
         # Export & Encoder Settings Card
         settings_box = ctk.CTkFrame(right, fg_color=theme.BG_SURFACE_ALT, corner_radius=8, border_width=1, border_color=theme.BORDER_COLOR)
-        settings_box.pack(fill="x", padx=16, pady=(10, 8))
+        settings_box.pack(fill="x", padx=16, pady=(8, 6))
 
         s_row1 = ctk.CTkFrame(settings_box, fg_color="transparent")
-        s_row1.pack(fill="x", padx=12, pady=(10, 4))
+        s_row1.pack(fill="x", padx=12, pady=(8, 4))
 
         ctk.CTkLabel(s_row1, text="Preset:", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY).pack(side="left", padx=(0, 6))
         self.res_menu = ctk.CTkOptionMenu(
@@ -303,11 +404,11 @@ class App(ctk.CTk):
                 "4:5 Portrait Feed (1080 × 1350)",
             ],
             font=theme.FONT_SMALL,
-            width=260,
+            width=250,
         )
         self.res_menu.pack(side="left")
 
-        ctk.CTkLabel(s_row1, text="Encoder:", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY).pack(side="left", padx=(14, 6))
+        ctk.CTkLabel(s_row1, text="Hardware:", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY).pack(side="left", padx=(12, 6))
         enc_names = [f"{e.name}" for e in self.engine.available_encoders]
         self.enc_menu = ctk.CTkOptionMenu(
             s_row1,
@@ -317,9 +418,8 @@ class App(ctk.CTk):
         )
         self.enc_menu.pack(side="left")
 
-        # Destination Folder row
         s_row2 = ctk.CTkFrame(settings_box, fg_color="transparent")
-        s_row2.pack(fill="x", padx=12, pady=(4, 10))
+        s_row2.pack(fill="x", padx=12, pady=(4, 8))
 
         ctk.CTkLabel(s_row2, text="Save to:", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY).pack(side="left", padx=(0, 6))
         self.out_label = ctk.CTkLabel(
@@ -427,6 +527,31 @@ class App(ctk.CTk):
                 selected_enc = e.encoder_id
                 break
 
+        # Trimming
+        start_sec = None
+        duration_sec = None
+        if self.trim_switch.get() == 1:
+            try:
+                start_sec = float(self.start_time_entry.get())
+            except Exception:
+                start_sec = 0.0
+            try:
+                duration_sec = float(self.duration_entry.get())
+            except Exception:
+                duration_sec = 15.0
+
+        # Audio mode
+        a_mode_str = self.audio_mode_menu.get()
+        audio_mode = "copy"
+        if "Mix" in a_mode_str:
+            audio_mode = "mix_all"
+        elif "AAC" in a_mode_str:
+            audio_mode = "aac_high"
+        elif "Mute" in a_mode_str:
+            audio_mode = "mute"
+
+        vol_db = float(self.vol_slider.get())
+
         return JobConfig(
             target_w=target_w,
             target_h=target_h,
@@ -435,6 +560,10 @@ class App(ctk.CTk):
             dim_factor=dim_factor,
             vertical_offset=offset,
             encoder_id=selected_enc,
+            audio_mode=audio_mode,
+            audio_gain_db=vol_db,
+            start_sec=start_sec,
+            duration_sec=duration_sec,
             output_dir=self.selected_output_folder,
         )
 
@@ -443,31 +572,52 @@ class App(ctk.CTk):
         self.dim_val_lbl.configure(text=f"{int(self.dim_slider.get())}% Darker")
         self._trigger_preview_update()
 
+    def _on_vol_slider_changed(self, value):
+        self.vol_lbl.configure(text=f"{float(value):+.1f} dB")
+
+    def _on_scrub_changed(self, value):
+        self.scrub_timestamp = float(value)
+        self.scrub_lbl.configure(text=f"{self.scrub_timestamp:.1f}s")
+        self._trigger_preview_update()
+
     def _on_filter_changed(self, value):
         self._trigger_preview_update()
+
+    def _on_trim_switch_toggle(self):
+        # Update UI if trim is enabled
+        pass
+
+    def _set_quick_duration(self, seconds_str: str):
+        self.duration_entry.delete(0, "end")
+        self.duration_entry.insert(0, f"{float(seconds_str):.1f}")
+        if self.trim_switch.get() == 0:
+            self.trim_switch.select()
 
     def _trigger_preview_update(self):
         if not self.preview_job:
             return
         if self._preview_timer:
             self.after_cancel(self._preview_timer)
-        self._preview_timer = self.after(250, self._render_preview)
+        self._preview_timer = self.after(200, self._render_preview)
 
     def _render_preview(self):
         if not self.preview_job:
             return
         cfg = self._get_current_job_config()
+        ts = self.scrub_timestamp
+        dur = self.preview_job.metadata.duration_sec if self.preview_job.metadata else None
 
         def _worker():
             img = self.engine.generate_preview_frame(
                 src=self.preview_job.src_path,
-                timestamp_sec=2.0,
+                timestamp_sec=ts,
                 blur_strength=cfg.blur_strength,
                 blur_algorithm=cfg.blur_algorithm,
                 dim_factor=cfg.dim_factor,
                 vertical_offset=cfg.vertical_offset,
                 sharp_scale=cfg.sharp_scale,
-                preview_height=380,
+                preview_height=340,
+                video_duration=dur,
             )
             if img:
                 self.after(0, self._display_preview_image, img)
@@ -495,8 +645,7 @@ class App(ctk.CTk):
         new_jobs = self.batch.add_files(paths, cfg)
 
         if not self.preview_job and new_jobs:
-            self.preview_job = new_jobs[0]
-            self._render_preview()
+            self._select_preview_job(new_jobs[0])
 
         self.btn_convert.configure(state="normal")
 
@@ -523,7 +672,8 @@ class App(ctk.CTk):
             if j.status == "pending":
                 j.config = cfg
                 if self.selected_output_folder:
-                    j.dst_path = self.selected_output_folder / f"{j.src_path.stem}_vertical.mp4"
+                    suffix = "_short.mp4" if cfg.duration_sec else "_vertical.mp4"
+                    j.dst_path = self.selected_output_folder / f"{j.src_path.stem}{suffix}"
 
         self.btn_convert.configure(text="STOP CONVERSION", fg_color=theme.STATUS_ERROR, hover_color="#dc2626")
         self.btn_add.configure(state="disabled")
@@ -575,7 +725,6 @@ class App(ctk.CTk):
             top_row = ctk.CTkFrame(card, fg_color="transparent")
             top_row.pack(fill="x", padx=10, pady=(6, 2))
 
-            # Clickable title to switch preview
             name_lbl = ctk.CTkButton(
                 top_row,
                 text=job.src_path.name,
@@ -588,7 +737,6 @@ class App(ctk.CTk):
             )
             name_lbl.pack(side="left", fill="x", expand=True)
 
-            # Delete button
             del_btn = ctk.CTkButton(
                 top_row,
                 text="✕",
@@ -615,7 +763,8 @@ class App(ctk.CTk):
 
             res_txt = f"{job.metadata.width}×{job.metadata.height}" if job.metadata else "Unknown"
             dur_txt = f"{int(job.metadata.duration_sec)}s" if job.metadata else ""
-            meta_lbl = ctk.CTkLabel(info_row, text=f"{res_txt} • {dur_txt}", font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED)
+            tracks_txt = f" • {job.metadata.audio_tracks_count} aud" if (job.metadata and job.metadata.audio_tracks_count > 1) else ""
+            meta_lbl = ctk.CTkLabel(info_row, text=f"{res_txt} • {dur_txt}{tracks_txt}", font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED)
             meta_lbl.pack(side="left")
 
             prog_lbl = ctk.CTkLabel(info_row, text=f"{job.progress:.0f}%", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY)
@@ -633,6 +782,12 @@ class App(ctk.CTk):
 
     def _select_preview_job(self, job: RenderJob):
         self.preview_job = job
+        if job.metadata and job.metadata.duration_sec > 0:
+            dur = job.metadata.duration_sec
+            self.scrub_slider.configure(to=max(1.0, dur))
+            self.scrub_slider.set(min(1.0, dur / 2.0))
+            self.scrub_timestamp = self.scrub_slider.get()
+            self.scrub_lbl.configure(text=f"{self.scrub_timestamp:.1f}s / {dur:.1f}s")
         self._render_preview()
 
     def _format_status_badge(self, job: RenderJob) -> str:

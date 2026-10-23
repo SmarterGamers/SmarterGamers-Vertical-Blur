@@ -1,15 +1,17 @@
-"""SmarterGamers Vertical Blur Editor - High-Performance FFmpeg Core Engine.
+"""SmarterGamers Vertical Blur Editor - High-Performance FFmpeg Core Engine v1.2.0.
 
-Key Features & Safeguards:
+Key Features & Capabilities:
 - Robust FFmpeg & FFprobe auto-discovery across PATH, imageio-ffmpeg, and Windows directories
 - Comprehensive GPU hardware encoder detection (NVIDIA NVENC, Intel QSV, AMD AMF, CPU libx264)
-- Video metadata probe (resolution, duration, fps, bitrate, audio codec detection)
-- Resilient audio handling: gracefully handles videos with or without audio tracks (-an vs -c:a copy)
+- Hardware-accelerated video decoding (-hwaccel auto)
+- Sub-clip trimming support (instant keyframe fast-seek -ss and duration -t)
+- Multi-track audio intelligence (mix all tracks e.g. Game + Mic, or primary track)
+- Audio volume gain adjustments (+3dB, +6dB) and silent audio safety (-an)
+- Resilient preview frame extraction with dynamic duration-aware clamping
 - Universal pixel format normalization (converts HDR/10-bit/4:2:2/4:4:4 safely to yuv420p)
 - Strict even-dimension enforcement (trunc(iw/2)*2) preventing encoder dimension errors
-- Studio contrast dimming with fast eq filter
-- Ultra-fast dual-stage BoxBlur pipeline (10x-15x faster than gblur)
-- Micro-second preview frame extraction
+- Studio contrast dimming with fast eq/colorlevels filter
+- Ultra-fast dual-stage BoxBlur pipeline (15x faster than gblur)
 """
 
 import json
@@ -19,7 +21,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from PIL import Image
 
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -35,7 +37,8 @@ class VideoMetadata:
     video_codec: str
     audio_codec: Optional[str]
     has_audio: bool
-    bitrate: Optional[int]
+    audio_tracks_count: int = 1
+    bitrate: Optional[int] = None
     pixel_format: str = "yuv420p"
 
 
@@ -136,7 +139,7 @@ class FFmpegEngine:
         return self.available_encoders[0]
 
     def probe_video(self, video_path: Path) -> Optional[VideoMetadata]:
-        """Extracts video metadata including dimensions, duration, pixel format, and audio stream presence."""
+        """Extracts video metadata including dimensions, duration, pixel format, audio tracks."""
         if not self.ffmpeg_exe or not video_path.exists():
             return None
 
@@ -155,7 +158,7 @@ class FFmpegEngine:
                 if res.returncode == 0:
                     data = json.loads(res.stdout)
                     v_stream = next((s for s in data.get("streams", []) if s.get("codec_type") == "video"), None)
-                    a_stream = next((s for s in data.get("streams", []) if s.get("codec_type") == "audio"), None)
+                    a_streams = [s for s in data.get("streams", []) if s.get("codec_type") == "audio"]
                     if v_stream:
                         w = int(v_stream.get("width", 1920))
                         h = int(v_stream.get("height", 1080))
@@ -173,8 +176,9 @@ class FFmpegEngine:
                             duration_sec=dur,
                             fps=fps,
                             video_codec=v_stream.get("codec_name", "unknown"),
-                            audio_codec=a_stream.get("codec_name") if a_stream else None,
-                            has_audio=(a_stream is not None),
+                            audio_codec=a_streams[0].get("codec_name") if a_streams else None,
+                            has_audio=(len(a_streams) > 0),
+                            audio_tracks_count=len(a_streams),
                             bitrate=int(data.get("format", {}).get("bit_rate", 0)) or None,
                             pixel_format=v_stream.get("pix_fmt", "yuv420p"),
                         )
@@ -198,7 +202,8 @@ class FFmpegEngine:
             if res_match:
                 w, h = int(res_match.group(1)), int(res_match.group(2))
 
-            has_audio = ("Audio:" in stderr)
+            audio_matches = re.findall(r"Stream #\d+:\d+.*Audio:", stderr)
+            has_audio = (len(audio_matches) > 0)
 
             return VideoMetadata(
                 path=video_path,
@@ -209,6 +214,7 @@ class FFmpegEngine:
                 video_codec="unknown",
                 audio_codec="aac" if has_audio else None,
                 has_audio=has_audio,
+                audio_tracks_count=len(audio_matches),
                 bitrate=None,
                 pixel_format="yuv420p",
             )
@@ -226,16 +232,13 @@ class FFmpegEngine:
         sharp_scale: float = 1.0,
     ) -> str:
         """Constructs an optimized FFmpeg filtergraph with format normalization and dimension guards."""
-        # Ensure dimensions are strictly even
         target_w = (target_w // 2) * 2
         target_h = (target_h // 2) * 2
 
         fg_w = int(target_w * sharp_scale)
         fg_w = (fg_w // 2) * 2
 
-        # Background chain
         if blur_algorithm == "boxblur":
-            # Dual-stage downsample blur: 15x faster than gblur
             sub_w = max(16, (target_w // 4 // 2) * 2)
             sub_h = max(16, (target_h // 4 // 2) * 2)
             radius = max(2, int(blur_strength * 0.6))
@@ -247,12 +250,10 @@ class FFmpegEngine:
                 f"boxblur=luma_radius={radius}:luma_power=2:chroma_radius={radius}:chroma_power=2",
             ]
             if dim_factor < 0.99:
-                # Dim background with fast colorlevels
                 bg_filters.append(f"colorlevels=rimax={dim_factor:.2f}:gimax={dim_factor:.2f}:bimax={dim_factor:.2f}")
             bg_filters.append(f"scale={target_w}:{target_h}:flags=bilinear")
             bg_chain = ",".join(bg_filters)
         else:
-            # Gaussian blur chain
             sigma = max(1, blur_strength)
             bg_filters = [
                 "format=yuv420p",
@@ -264,15 +265,13 @@ class FFmpegEngine:
                 bg_filters.append(f"colorlevels=rimax={dim_factor:.2f}:gimax={dim_factor:.2f}:bimax={dim_factor:.2f}")
             bg_chain = ",".join(bg_filters)
 
-        # Foreground chain: scaled with even dimensions maintained (-2)
         fg_chain = f"format=yuv420p,scale={fg_w}:-2:flags=lanczos"
 
-        # Overlay positioning with vertical offset
         y_expr = f"(H-h)/2+{vertical_offset}"
         x_expr = f"(W-w)/2"
         overlay_chain = f"overlay={x_expr}:{y_expr}:format=yuv420"
 
-        return f"[0:v]split=2[bg_in][fg_in];[bg_in]{bg_chain}[bg_out];[fg_in]{fg_chain}[fg_out];[bg_out][fg_out]{overlay_chain}"
+        return f"[0:v]split=2[bg_in][fg_in];[bg_in]{bg_chain}[bg_out];[fg_in]{fg_chain}[fg_out];[bg_out][fg_out]{overlay_chain}[vout]"
 
     def build_render_command(
         self,
@@ -287,11 +286,33 @@ class FFmpegEngine:
         sharp_scale: float = 1.0,
         encoder_id: str = "h264_nvenc",
         quality_preset: str = "balanced",
-        audio_mode: str = "copy",
+        audio_mode: str = "copy",  # copy, mix_all, aac_high, mute
         has_audio: bool = True,
+        audio_tracks_count: int = 1,
+        audio_gain_db: float = 0.0,
+        start_sec: Optional[float] = None,
+        duration_sec: Optional[float] = None,
+        enable_hwaccel: bool = True,
     ) -> List[str]:
-        """Constructs full FFmpeg command list for rendering with progress output and audio safeguards."""
-        filtergraph = self.build_filtergraph(
+        """Constructs full FFmpeg command list for rendering with trimming, audio mixing, and GPU acceleration."""
+        cmd = [self.ffmpeg_exe, "-y", "-loglevel", "warning"]
+
+        # Hardware decode acceleration when using hardware encoder
+        if enable_hwaccel and encoder_id in ("h264_nvenc", "hevc_nvenc", "av1_nvenc"):
+            cmd += ["-hwaccel", "auto"]
+
+        # Fast seek before input for sub-clip trimming
+        if start_sec is not None and start_sec > 0:
+            cmd += ["-ss", f"{start_sec:.3f}"]
+
+        cmd += ["-progress", "pipe:1", "-nostats", "-i", str(src)]
+
+        # Duration limit if trimming
+        if duration_sec is not None and duration_sec > 0:
+            cmd += ["-t", f"{duration_sec:.3f}"]
+
+        # Video Filtergraph
+        v_filtergraph = self.build_filtergraph(
             target_w=target_w,
             target_h=target_h,
             blur_strength=blur_strength,
@@ -301,15 +322,35 @@ class FFmpegEngine:
             sharp_scale=sharp_scale,
         )
 
-        cmd = [
-            self.ffmpeg_exe,
-            "-y",
-            "-loglevel", "warning",
-            "-progress", "pipe:1",
-            "-nostats",
-            "-i", str(src),
-            "-filter_complex", filtergraph,
-        ]
+        # Multi-Track Audio Mixing / Filtering
+        filter_complex = v_filtergraph
+        map_args = ["-map", "[vout]"]
+
+        needs_audio_filter = False
+        audio_filter_expr = ""
+
+        if has_audio and audio_mode != "mute":
+            if audio_mode == "mix_all" and audio_tracks_count > 1:
+                # Downmix all available audio tracks into a unified stereo stream
+                inputs_str = "".join([f"[0:a:{i}]" for i in range(audio_tracks_count)])
+                audio_filter_expr = f"{inputs_str}amix=inputs={audio_tracks_count}:duration=longest"
+                if abs(audio_gain_db) > 0.1:
+                    audio_filter_expr += f",volume={audio_gain_db:+.1f}dB"
+                audio_filter_expr += "[aout]"
+                filter_complex += f";{audio_filter_expr}"
+                map_args += ["-map", "[aout]"]
+                needs_audio_filter = True
+            elif abs(audio_gain_db) > 0.1:
+                # Volume gain applied to primary track
+                audio_filter_expr = f"[0:a:0]volume={audio_gain_db:+.1f}dB[aout]"
+                filter_complex += f";{audio_filter_expr}"
+                map_args += ["-map", "[aout]"]
+                needs_audio_filter = True
+            else:
+                # Direct audio stream map
+                map_args += ["-map", "0:a:0?"]
+
+        cmd += ["-filter_complex", filter_complex] + map_args
 
         # Video encoder specific flags
         if encoder_id == "h264_nvenc":
@@ -345,12 +386,12 @@ class FFmpegEngine:
 
         cmd += ["-pix_fmt", "yuv420p"]
 
-        # Audio stream safeguard: only add audio flags if input actually has audio!
-        if has_audio:
-            if audio_mode == "copy":
-                cmd += ["-c:a", "copy"]
-            else:
+        # Audio stream codec
+        if has_audio and audio_mode != "mute":
+            if needs_audio_filter or audio_mode == "aac_high":
                 cmd += ["-c:a", "aac", "-b:a", "192k"]
+            else:
+                cmd += ["-c:a", "copy"]
         else:
             cmd += ["-an"]
 
@@ -360,17 +401,33 @@ class FFmpegEngine:
     def generate_preview_frame(
         self,
         src: Path,
-        timestamp_sec: float = 2.0,
+        timestamp_sec: float = 1.0,
         blur_strength: int = 20,
         blur_algorithm: str = "boxblur",
         dim_factor: float = 0.70,
         vertical_offset: int = 0,
         sharp_scale: float = 1.0,
         preview_height: int = 540,
+        video_duration: Optional[float] = None,
     ) -> Optional[Image.Image]:
-        """Extracts a single frame and renders the 9:16 blurred composition in milliseconds."""
+        """Extracts a single frame and renders the 9:16 blurred composition in milliseconds.
+        Safely clamps timestamp to prevent EOF seeking errors on short clips.
+        """
         if not self.ffmpeg_exe or not src.exists():
             return None
+
+        # Safe timestamp clamping
+        dur = video_duration
+        if dur is None:
+            meta = self.probe_video(src)
+            dur = meta.duration_sec if meta else None
+
+        safe_ts = max(0.0, timestamp_sec)
+        if dur and dur > 0:
+            if safe_ts >= dur:
+                safe_ts = max(0.0, dur - 0.2)
+            if safe_ts == 0.0 and dur > 0.5:
+                safe_ts = 0.1
 
         preview_w = int(preview_height * (9 / 16))
         preview_w = (preview_w // 2) * 2
@@ -387,9 +444,10 @@ class FFmpegEngine:
 
         cmd = [
             self.ffmpeg_exe,
-            "-ss", str(timestamp_sec),
+            "-ss", f"{safe_ts:.3f}",
             "-i", str(src),
             "-filter_complex", filtergraph,
+            "-map", "[vout]",
             "-vframes", "1",
             "-f", "image2pipe",
             "-vcodec", "png",
@@ -403,5 +461,16 @@ class FFmpegEngine:
                 return Image.open(io.BytesIO(p.stdout))
         except Exception:
             pass
+
+        # Fallback to frame 0 if seeking failed
+        if safe_ts > 0.0:
+            try:
+                cmd[1] = "0.0"
+                p = subprocess.run(cmd, capture_output=True, creationflags=_NO_WINDOW, timeout=5)
+                if p.returncode == 0 and p.stdout:
+                    import io
+                    return Image.open(io.BytesIO(p.stdout))
+            except Exception:
+                pass
 
         return None

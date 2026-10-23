@@ -38,7 +38,9 @@ venv.bak/
 *.log
 tests/dummy.mp4
 tests/fixtures/
+tests/fixtures_adv/
 tests/output/
+tests/output_adv/
 release_id.txt
 *.tmp
 

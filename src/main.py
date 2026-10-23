@@ -1,6 +1,7 @@
-"""SmarterGamers Vertical Blur Editor - Main Entrypoint v1.1.0.
+"""SmarterGamers Vertical Blur Editor - Main Entrypoint v1.2.0.
 
-Supports both interactive GUI mode and headless CLI batch automation.
+Supports both interactive GUI mode and headless CLI batch automation with
+advanced clip trimming, multi-track audio mixing, and volume tuning.
 """
 
 import argparse
@@ -23,9 +24,9 @@ PRESETS = {
 
 
 def run_cli(args):
-    print("=" * 60)
-    print(" SmarterGamers — Vertical Blur Studio v1.1.0 (CLI)")
-    print("=" * 60)
+    print("=" * 64)
+    print(" SmarterGamers — Vertical Blur Studio v1.2.0 (CLI)")
+    print("=" * 64)
 
     engine = FFmpegEngine()
     if not engine.ffmpeg_exe:
@@ -51,12 +52,22 @@ def run_cli(args):
         dim_factor=args.dim,
         vertical_offset=args.offset,
         encoder_id=args.encoder or engine.preferred_encoder.encoder_id,
+        audio_mode=args.audio_mode,
+        audio_gain_db=args.volume,
+        start_sec=args.start,
+        duration_sec=args.duration,
+        enable_hwaccel=args.hwaccel,
         output_dir=out_dir,
     )
 
     batch = BatchProcessor(engine)
     jobs = batch.add_files(inputs, config)
-    print(f"[*] Queued {len(jobs)} video(s) for rendering [{target_w}x{target_h}].\n")
+    print(f"[*] Queued {len(jobs)} video(s) for rendering [{target_w}x{target_h}].")
+    if args.start is not None or args.duration is not None:
+        print(f"[*] Trimming applied: start={args.start or 0.0}s, duration={args.duration or 'Full'}s")
+    if args.audio_mode != "copy":
+        print(f"[*] Audio Mode: {args.audio_mode} (gain: {args.volume:+.1f}dB)")
+    print()
 
     def on_progress(job):
         sys.stdout.write(f"\r -> {job.src_path.name}: {job.progress:.1f}% ({job.speed_factor})")
@@ -85,16 +96,21 @@ def run_gui():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SmarterGamers Vertical Blur Editor v1.1.0")
+    parser = argparse.ArgumentParser(description="SmarterGamers Vertical Blur Editor v1.2.0")
     parser.add_argument("inputs", nargs="*", help="Video file paths to process (CLI mode)")
     parser.add_argument("--preset", choices=list(PRESETS.keys()), default="shorts", help="Format preset")
     parser.add_argument("--blur", type=int, default=20, help="Blur radius (5-50)")
     parser.add_argument("--algorithm", choices=["boxblur", "gaussian"], default="boxblur", help="Blur filter algorithm")
     parser.add_argument("--dim", type=float, default=0.70, help="Background contrast factor (0.4 - 1.0)")
     parser.add_argument("--offset", type=int, default=0, help="Vertical offset from center in pixels")
-    parser.add_argument("--width", type=int, default=1080, help="Target width (overridden by preset if specified)")
-    parser.add_argument("--height", type=int, default=1920, help="Target height (overridden by preset if specified)")
+    parser.add_argument("--width", type=int, default=1080, help="Target width")
+    parser.add_argument("--height", type=int, default=1920, help="Target height")
     parser.add_argument("--encoder", type=str, default=None, help="Encoder id (e.g. h264_nvenc, libx264)")
+    parser.add_argument("--start", type=float, default=None, help="Trim start time in seconds")
+    parser.add_argument("--duration", type=float, default=None, help="Trim clip duration in seconds")
+    parser.add_argument("--audio-mode", choices=["copy", "mix_all", "aac_high", "mute"], default="copy", help="Audio processing mode")
+    parser.add_argument("--volume", type=float, default=0.0, help="Audio volume gain in dB (e.g. 3.0 or -3.0)")
+    parser.add_argument("--hwaccel", action="store_true", help="Enable GPU hardware decoding")
     parser.add_argument("-o", "--output-dir", type=str, default=None, help="Output destination folder")
     parser.add_argument("--cli", action="store_true", help="Force headless CLI mode")
 
