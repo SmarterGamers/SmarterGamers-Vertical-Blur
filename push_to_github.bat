@@ -1,9 +1,15 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+set "REPO_DIR=C:\Users\ultim\Desktop\Projects\SmarterGamers\SmarterGamers-Vertical-Blur"
+if exist "%REPO_DIR%\.git" (
+    cd /d "%REPO_DIR%"
+) else (
+    cd /d "%~dp0"
+)
 echo =======================================================
 echo   SmarterGamers Vertical Blur Editor - Push to GitHub
 echo =======================================================
+echo Working Directory: %CD%
 echo.
 echo Current branch: main
 echo Latest commit:
