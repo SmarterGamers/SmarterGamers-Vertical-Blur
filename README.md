@@ -153,6 +153,36 @@ Convenient 1-click batch launchers are included in the repository root:
 
 ---
 
+## 🤖 Automated n8n Personal Clipper
+
+Drop a VOD into `C:\SmarterGamers\Clips\Inbox` and a self-hosted **n8n** workflow turns it into a
+reviewed, rendered 9:16 Short — without you scrubbing the timeline.
+
+**What it does:** a Windows-side runner (`src/clipper/runner.py`) probes the file, transcribes it
+with faster-whisper, scores the five most promising 30 s windows (audio energy, onsets, transcript
+cues), adds a 0–100 breakdown (hook / retention / clarity / length), and asks a local Ollama model
+for a second opinion. The workflow then renders the window you pick with this editor
+(`--preset shorts --captions captions.ass`) and builds a CapCut-ready folder (clip, `captions.srt`,
+transcript, EditPilot prompts, step list, social copy) next to the output.
+
+**Human in the loop:** nothing is rendered until you reply on Telegram. The bot posts the five
+candidates with scores and reasons; you answer `2`, `2 start 5s earlier`, `2 end 3s later`, or
+`reject all`. No reply within 24 h means nothing is rendered. Every run is logged to
+`C:\SmarterGamers\Clips\runs.jsonl`. The workflow never uploads or posts anywhere.
+
+**Setup:** everything is in [`n8n/README.md`](n8n/README.md) — compose mount, runner, Telegram bot,
+importing `n8n/personal-clipper-workflow.json` + the error-handler workflow.
+
+**`--captions` flag:** the CLI accepts `--captions <file.ass|.srt>` to burn a subtitle file into
+the render; the clipper generates a safe-zone `captions.ass` from word timestamps for the chosen
+window.
+
+**Honest note:** the scores are heuristics, not view predictions. CapCut has no public API, and
+EditPilot availability depends on version, account and region (and may be paid) — the package is
+plain files you open by hand.
+
+---
+
 ## 📄 License & Credits
 
 - Licensed under the **MIT License**.

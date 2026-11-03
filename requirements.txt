@@ -3,3 +3,11 @@ Pillow>=10.0.0
 imageio-ffmpeg>=0.5.1
 pyinstaller>=6.0.0
 windnd>=1.0.7
+
+# --- Personal Clipper runner (src/clipper) — optional extras ---------------------------
+# The runner itself is stdlib-only. Install these into C:\SmarterGamers\clipper-venv314
+# (system Python 3.14; the miniconda 3.11 venv crashes on ctranslate2/onnxruntime import):
+#   C:\SmarterGamers\clipper-venv314\Scripts\python.exe -m pip install faster-whisper "av<19" numpy
+# faster-whisper   # optional: /transcribe word-level timestamps (CUDA float16 on RTX, cpu/int8 fallback)
+# av<19            # optional: PyAV pin — av 19 removed the metadata_errors kwarg faster-whisper 1.2.1 uses (TypeError)
+# numpy            # optional: faster RMS/onset maths in /score (pure-Python fallback is used without it)

@@ -1,0 +1,85 @@
+# Personal Clipper — Runner ↔ n8n contract (v1)
+
+n8n runs in Docker (`n8nio/n8n:2.44.6`, container `n8n`, 127.0.0.1:5678). It cannot run
+Windows binaries, so every heavy step is an HTTP call to a small Windows-side **runner**
+(`src/clipper/runner.py`, stdlib `http.server`, bound to `127.0.0.1:5690`). From inside the
+container the runner is `http://host.docker.internal:5690` and Ollama is
+`http://host.docker.internal:11434`.
+
+All requests/responses are JSON. Every error response is `{"ok": false, "stage": "<stage>",
+"error": "<human message>", "fix": "<exact command or action, or null>"}` with HTTP 500.
+Every success is `{"ok": true, ...}`. Paths are Windows paths as the runner sees them.
+
+Config lives in ONE place on the n8n side (the `Config` Set node) and ONE place on the
+runner side (`src/clipper/config.py`, env-overridable). Defaults:
+
+| key | default |
+|---|---|
+| INBOX | `C:\SmarterGamers\Clips\Inbox` |
+| WORKING | `C:\SmarterGamers\Clips\Working` |
+| READY | `C:\SmarterGamers\Clips\Ready` |
+| LEDGER | `C:\SmarterGamers\Clips\processed.json` |
+| RUN_LOG | `C:\SmarterGamers\Clips\runs.jsonl` |
+| RUNNER_URL | `http://host.docker.internal:5690` |
+| OLLAMA_URL | `http://host.docker.internal:11434` |
+| OLLAMA_MODEL | `llama3.2:latest` |
+| TARGET_LEN_SEC | `30` (15 / 60 allowed) |
+| REVIEW_CHANNEL | `telegram` (discord / email swappable) |
+| REVIEW_TIMEOUT_HOURS | `24` |
+| BF6_CLIPPER_PATH | `C:\Users\ultim\Desktop\Projects\HistoryView.org\bf6_clipper.py` |
+| REPO_DIR | repo root (auto) |
+| PYTHON_EXE | the venv python running the runner |
+
+## Endpoints
+
+### GET /health
+→ `{"ok":true,"ffmpeg":"<path>","ffprobe":"<path>","faster_whisper":"<ver>|null","bf6_clipper":bool,"model":"<whisper model or null>"}`
+
+### POST /guard   {"path": "<file in Inbox>"}
+Stage 0. → `{"ok":true,"skip":false}` or `{"ok":true,"skip":true,"reason":"too_short|not_video|already_processed"}`.
+Hash = sha1 of (size, mtime, first 1 MB). Idempotent: a processed hash always returns skip.
+
+### POST /ingest   {"path": "<file>"}
+Stage 1. Moves the file to `WORKING\<job_id>\source.<ext>` (job_id = `<stem>_<YYYYmmdd_HHMMSS>`),
+ffprobe → `{"ok":true,"job_id","job_dir","source","duration_sec","width","height","fps","audio_tracks":[{"index","codec","channels"}]}`.
+Track layout is never changed.
+
+### POST /transcribe   {"job_id": "..."}
+Stage 2. faster-whisper, word timestamps. Writes `transcript.json` (`{"segments":[{"start","end","text","words":[{"start","end","word"}]}]}`)
+and `transcript.srt` in the job dir. → `{"ok":true,"transcript":"<path>","srt":"<path>","words":N,"model":"small.en","device":"cuda|cpu"}`.
+If faster-whisper or the model is missing → error with `fix: "C:\\SmarterGamers\\clipper-venv\\Scripts\\pip install faster-whisper"` (or the model download hint). NEVER returns ok without words unless the audio truly has no speech (then `words:0, "note":"no speech detected"` and the workflow still shows that in review).
+
+### POST /score   {"job_id": "...", "target_len": 30}
+Stage 3. Returns top-5 windows:
+`{"ok":true,"candidates":[{"rank":1,"start":123.4,"end":153.4,"duration":30.0,"score":0.81,"reason":"loud reaction + 'no way' at 0:03","signals":{"audio_energy":..,"onsets":..,"speech_density":..,"exclaim":..,"penalties":[...]}}]}`.
+Signals: v1 `bf6_clipper` onsets (imported by path, optional), RMS energy, transcript exclamations/questions/payoff words, pacing, penalties for mid-sentence starts / leading silence / no audio.
+
+### POST /predict   {"job_id": "...", "candidates": [...]}
+Stage 4. Per candidate adds `"predict": {"total":0-100,"hook":0-40,"retention":0-30,"clarity":0-20,"length_fit":0-10,"lulls":[{"start","end"}],"biggest_fix":"..."}` and returns `"recommended": <rank>`.
+
+### POST /ollama_verdict   {"job_id": "...", "candidates": [...]}
+Runner-side helper (so n8n doesn't parse LLM output): calls Ollama `/api/chat` with `format: "json"`, 60 s timeout, per candidate. Adds `"llm": {"verdict","fix","hook_line","agrees": bool}` or `"llm": null, "llm_error": "<msg>"`. Never raises on LLM failure.
+(n8n may instead call Ollama directly via HTTP Request; both paths produce the same shape.)
+
+### POST /render   {"job_id": "...", "rank": 2, "start": 118.4, "end": 148.4, "captions": true, "offset": -120, "audio_mode": "mix_all", "volume": 3.0}
+Stage 6. Writes `captions.ass` (safe-zone) from transcript words for [start,end], then runs
+`python src\main.py "<source>" --preset shorts --start S --duration D --audio-mode mix_all --volume V --offset O --hwaccel --captions "<captions.ass>" -o "<job_dir>"`,
+renames the result to `READY\<original>_clip<rank>_<len>s.mp4`. → `{"ok":true,"output":"<path>","cli":"<exact command>","encoder":"h264_nvenc|..."}`.
+
+### POST /package   {"job_id": "...", "rank": 2, "output": "<path>", "candidate": {...}}
+Stage 6B. Creates `READY\<original>_clip<rank>_<len>s_capcut\` with: the rendered clip (copied), `captions.srt` (clip-relative), `transcript.json`, `editpilot-prompts.md` (Ollama, clip-specific, heuristic fallback text if Ollama fails), `capcut-steps.md`, `social.md` (titles/caption/hashtags from the existing `smartergamers-clip` webhook if reachable). → `{"ok":true,"package_dir":"<path>","files":[...]}`.
+
+### POST /log   {"job_id","input","candidates","approved","output","package_dir","status"}
+Stage 7. Appends one JSON line to RUN_LOG and marks the hash processed in LEDGER. → `{"ok":true}`.
+
+## Review message format (built by n8n Code node)
+```
+🎬 Personal Clipper — <original filename> (<duration>)
+#1  score 78/100  (hook 31 · retention 24 · clarity 15 · length 8)   0:02:03 → 0:02:33
+    why: loud reaction + "no way" at 0:03
+    fix: cut the first 3 s — the hook starts at 0:04
+    llm: "Strong hook, viewer hears the stakes immediately" ✅ agrees
+#2 ...
+Reply: a number (e.g. 2), "2 start 5s earlier", "2 end 3s later", or "reject all". No reply in 24 h = nothing rendered.
+```
+Reply grammar parsed by n8n: `^(\d)(?:\s*(?:start|end)\s*([+-]?\d+(?:\.\d+)?)\s*s?\s*(earlier|later)?)*$|^reject all$` (case-insensitive).

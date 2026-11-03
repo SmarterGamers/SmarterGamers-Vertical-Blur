@@ -230,8 +230,14 @@ class FFmpegEngine:
         dim_factor: float = 0.70,
         vertical_offset: int = 0,
         sharp_scale: float = 1.0,
+        captions_path: Optional[str] = None,
     ) -> str:
-        """Constructs an optimized FFmpeg filtergraph with format normalization and dimension guards."""
+        """Constructs an optimized FFmpeg filtergraph with format normalization and dimension guards.
+
+        When ``captions_path`` is given, an ASS/SRT ``subtitles=`` burn-in stage is appended
+        after the overlay. With ``captions_path=None`` the output is byte-identical to the
+        caption-less graph.
+        """
         target_w = (target_w // 2) * 2
         target_h = (target_h // 2) * 2
 
@@ -271,7 +277,24 @@ class FFmpegEngine:
         x_expr = f"(W-w)/2"
         overlay_chain = f"overlay={x_expr}:{y_expr}:format=yuv420"
 
+        if captions_path:
+            escaped = self.escape_filter_path(captions_path)
+            return (
+                f"[0:v]split=2[bg_in][fg_in];[bg_in]{bg_chain}[bg_out];[fg_in]{fg_chain}[fg_out];"
+                f"[bg_out][fg_out]{overlay_chain}[vpre];[vpre]subtitles='{escaped}'[vout]"
+            )
+
         return f"[0:v]split=2[bg_in][fg_in];[bg_in]{bg_chain}[bg_out];[fg_in]{fg_chain}[fg_out];[bg_out][fg_out]{overlay_chain}[vout]"
+
+    @staticmethod
+    def escape_filter_path(path: str) -> str:
+        """Escapes a filesystem path for use inside an FFmpeg filter option value.
+
+        Windows backslashes become forward slashes (FFmpeg accepts them on Windows) and
+        drive-letter colons are escaped so the filter parser does not treat them as option
+        separators, e.g. ``C:\\a\\b.ass`` -> ``C\\:/a/b.ass``.
+        """
+        return str(path).replace("\\", "/").replace(":", "\\:")
 
     def build_render_command(
         self,
@@ -293,8 +316,12 @@ class FFmpegEngine:
         start_sec: Optional[float] = None,
         duration_sec: Optional[float] = None,
         enable_hwaccel: bool = True,
+        captions_path: Optional[str] = None,
     ) -> List[str]:
-        """Constructs full FFmpeg command list for rendering with trimming, audio mixing, and GPU acceleration."""
+        """Constructs full FFmpeg command list for rendering with trimming, audio mixing, and GPU acceleration.
+
+        ``captions_path`` (optional .ass/.srt) is burned in via the filtergraph's subtitles stage.
+        """
         cmd = [self.ffmpeg_exe, "-y", "-loglevel", "warning"]
 
         # Hardware decode acceleration when using hardware encoder
@@ -320,6 +347,7 @@ class FFmpegEngine:
             dim_factor=dim_factor,
             vertical_offset=vertical_offset,
             sharp_scale=sharp_scale,
+            captions_path=captions_path,
         )
 
         # Multi-Track Audio Mixing / Filtering

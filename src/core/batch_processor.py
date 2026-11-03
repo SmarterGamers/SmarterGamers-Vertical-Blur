@@ -40,6 +40,7 @@ class JobConfig:
     duration_sec: Optional[float] = None
     enable_hwaccel: bool = True
     output_dir: Optional[Path] = None
+    captions_path: Optional[Path] = None  # optional .ass/.srt burned in after the overlay
 
 
 @dataclass
@@ -229,6 +230,7 @@ class BatchProcessor:
             start_sec=job.config.start_sec,
             duration_sec=job.config.duration_sec,
             enable_hwaccel=job.config.enable_hwaccel,
+            captions_path=str(job.config.captions_path) if job.config.captions_path else None,
         )
 
         try:

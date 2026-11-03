@@ -1,0 +1,135 @@
+{
+  "name": "Personal Clipper — Error Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Personal Clipper — Error Handler\nSet this as the **Error workflow** of *Personal Clipper* (workflow Settings → Error workflow).\nThe Error Trigger only receives the workflow name, the failed node (= stage), the error message and the execution URL — not the workflow's data. The runner puts the stage, a human message and a `fix` hint into its error body, which n8n surfaces in `execution.error.message`; open the execution URL to see the input file / job_id.\nError workflows fire for production (trigger-started) executions only, not for manual test runs.",
+        "height": 240,
+        "width": 700,
+        "color": 4
+      },
+      "id": "09c56929-9d0c-4f75-a157-34290752b9e8",
+      "name": "Note 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "136fa05e-4b9d-4bfc-bdea-2a52cd875774",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "43584809-25c3-4927-8684-8ed3ec84a45f",
+              "name": "TELEGRAM_CHAT_ID",
+              "value": "REPLACE_WITH_YOUR_CHAT_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "ac8ae079-6ceb-4c5d-8283-454f377263c6",
+      "name": "Error Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nconst ex = j.execution || {};\nconst err = ex.error || {};\nconst wf = j.workflow || {};\nlet msg = err.message || String(err) || 'unknown error';\n// The runner returns {\"ok\":false,\"stage\":..,\"error\":..,\"fix\":..}; n8n often embeds that JSON in the message. Try to pull it out.\nlet stage = ex.lastNodeExecuted || '?';\nlet fix = null;\nlet jobHint = null;\nconst m = msg.match(/\\{[\\s\\S]*\"ok\"\\s*:\\s*false[\\s\\S]*\\}/);\nif (m) {\n  try {\n    const body = JSON.parse(m[0]);\n    if (body.stage) stage = `${ex.lastNodeExecuted || '?'} (${body.stage})`;\n    if (body.error) msg = body.error;\n    if (body.fix) fix = body.fix;\n  } catch (e) { /* keep raw message */ }\n}\nconst jm = msg.match(/[A-Za-z0-9_-]+_\\d{8}_\\d{6}/);\nif (jm) jobHint = jm[0];\nconst fm = msg.match(/[A-Za-z]:\\\\[^\"'\\n]+\\.(mp4|mkv|mov|webm)/i);\nconst fileHint = fm ? fm[0] : null;\n\nconst lines = [\n  `❌ Personal Clipper failed`,\n  `Workflow: ${wf.name || '?'}`,\n  `Stage / node: ${stage}`,\n];\nif (fileHint) lines.push(`Input: ${fileHint}`);\nif (jobHint) lines.push(`Job: ${jobHint}`);\nlines.push(`Error: ${msg}`);\nif (fix) lines.push(`Fix: ${fix}`);\nif (ex.url) lines.push(`Execution: ${ex.url}`);\nreturn [{ json: { text: lines.join('\\n'), chat_id: j.TELEGRAM_CHAT_ID } }];\n"
+      },
+      "id": "2624ab1a-95ae-4fd3-9e1e-e8455c0329da",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "d88730bd-a8c4-441b-944d-e8368261e5ad",
+      "name": "Telegram: Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        900,
+        0
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Config": {
+      "main": [
+        [
+          {
+            "node": "Format Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "personal-clipper"
+  },
+  "tags": []
+}

@@ -1,0 +1,1417 @@
+{
+  "name": "Personal Clipper",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Stage 0 — Triggers\nThree ways in, one path out.\n- **Local File Trigger** watches `/data/clips/Inbox` (the container side of `C:\\SmarterGamers\\Clips\\Inbox`). Polling is on because host→container inotify events are unreliable on Docker Desktop. This node is disabled by default in n8n 2.x — set `NODES_EXCLUDE=[]` in docker-compose (see docker-compose.patch.md).\n- **Manual Trigger** uses `Config.MANUAL_PATH`.\n- **Webhook** `POST /webhook/personal-clipper` with `{\"path\": \"C:\\\\...\\\\clip.mp4\"}`.\n\n`Config` is the ONLY place settings live on the n8n side. `Normalize Input` turns the container path into the Windows path the runner expects.",
+        "height": 330,
+        "width": 700,
+        "color": 4
+      },
+      "id": "fa081d03-f1da-4fff-a338-c3bef066ea2e",
+      "name": "Note 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -420
+      ]
+    },
+    {
+      "parameters": {
+        "triggerOn": "folder",
+        "path": "/data/clips/Inbox",
+        "events": [
+          "add"
+        ],
+        "options": {
+          "usePolling": true,
+          "awaitWriteFinish": true,
+          "ignoreInitial": true,
+          "followSymlinks": false
+        }
+      },
+      "id": "5e127008-0f28-4d9f-85a4-9684ec400325",
+      "name": "Local File Trigger",
+      "type": "n8n-nodes-base.localFileTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -80
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "bf647a84-0702-439f-951a-369b093299d1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "personal-clipper",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "3ff44a0d-dfbe-42ea-8c4a-db883d3f4cc0",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        320
+      ],
+      "webhookId": "personal-clipper-webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "133a1805-12d8-4741-af3b-9e380bd88753",
+              "name": "INBOX",
+              "value": "C:\\SmarterGamers\\Clips\\Inbox",
+              "type": "string"
+            },
+            {
+              "id": "c99ed485-80dc-4390-9498-578f95d46f7a",
+              "name": "WORKING",
+              "value": "C:\\SmarterGamers\\Clips\\Working",
+              "type": "string"
+            },
+            {
+              "id": "7deea96e-e186-45fb-bcd3-aca0bc7630e7",
+              "name": "READY",
+              "value": "C:\\SmarterGamers\\Clips\\Ready",
+              "type": "string"
+            },
+            {
+              "id": "f1d5aad6-b9ac-41e9-8935-d86500df2fb4",
+              "name": "LEDGER",
+              "value": "C:\\SmarterGamers\\Clips\\processed.json",
+              "type": "string"
+            },
+            {
+              "id": "c1e90dc3-4da4-4c92-afa4-716ba5aaa8ec",
+              "name": "RUN_LOG",
+              "value": "C:\\SmarterGamers\\Clips\\runs.jsonl",
+              "type": "string"
+            },
+            {
+              "id": "4830d9f7-248f-49d5-90a7-1c82fdd251e8",
+              "name": "RUNNER_URL",
+              "value": "http://host.docker.internal:5690",
+              "type": "string"
+            },
+            {
+              "id": "d0bb25be-ad46-4ef9-a8ab-f229f070ec6f",
+              "name": "OLLAMA_URL",
+              "value": "http://host.docker.internal:11434",
+              "type": "string"
+            },
+            {
+              "id": "a6282517-a940-459f-adc1-a92171af4e28",
+              "name": "OLLAMA_MODEL",
+              "value": "llama3.2:latest",
+              "type": "string"
+            },
+            {
+              "id": "849d7c4c-8694-4d34-9edb-02293e659035",
+              "name": "TARGET_LEN_SEC",
+              "value": 30,
+              "type": "number"
+            },
+            {
+              "id": "e86b6ca1-a479-4834-bac4-7357eb7dbeda",
+              "name": "REVIEW_CHANNEL",
+              "value": "telegram",
+              "type": "string"
+            },
+            {
+              "id": "b1b327f8-a967-43a0-96c8-e6ce90fa4b5a",
+              "name": "REVIEW_TIMEOUT_HOURS",
+              "value": 24,
+              "type": "number"
+            },
+            {
+              "id": "a9053d81-9a60-40f3-ae4a-c399adbb8509",
+              "name": "BF6_CLIPPER_PATH",
+              "value": "C:\\Users\\ultim\\Desktop\\Projects\\HistoryView.org\\bf6_clipper.py",
+              "type": "string"
+            },
+            {
+              "id": "421a6329-e440-43b5-8711-81aab2d0a515",
+              "name": "REPO_DIR",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "1814834c-fc4f-4930-8bb3-2931b8db3a61",
+              "name": "PYTHON_EXE",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "ec0ef2d7-adae-4605-9183-5b387e2fcd98",
+              "name": "CONTAINER_INBOX",
+              "value": "/data/clips/Inbox",
+              "type": "string"
+            },
+            {
+              "id": "ce13c4cb-920a-4735-bb68-1ece6c177c10",
+              "name": "TELEGRAM_CHAT_ID",
+              "value": "REPLACE_WITH_YOUR_CHAT_ID",
+              "type": "string"
+            },
+            {
+              "id": "003b0cee-f689-4397-915b-e761ffe7d295",
+              "name": "MANUAL_PATH",
+              "value": "C:\\SmarterGamers\\Clips\\Inbox\\test.mp4",
+              "type": "string"
+            },
+            {
+              "id": "be6676d5-fbf5-47ad-869a-1caf169f261d",
+              "name": "CAPTIONS",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "d634d1fd-b4aa-4fa7-b4eb-04cf35d24bae",
+              "name": "RENDER_OFFSET",
+              "value": -120,
+              "type": "number"
+            },
+            {
+              "id": "885122cf-6a61-417a-b4b7-b38e7b21da5f",
+              "name": "AUDIO_MODE",
+              "value": "mix_all",
+              "type": "string"
+            },
+            {
+              "id": "f42fedff-d9c1-41fd-bf93-339a8566edb9",
+              "name": "VOLUME",
+              "value": 3.0,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "e4acc617-6e9d-4bf7-935e-959e095c76da",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        300,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map whatever trigger fired into { path: <Windows path for the runner>, original: <basename>, trigger: <which> }\nconst cfg = $('Config').first().json;\nconst j = $input.first().json;\n\nlet raw = null;\nlet trigger = 'manual';\nif (j.path && typeof j.path === 'string' && !j.body) {\n  raw = j.path; trigger = 'file';                 // Local File Trigger → { event, path }\n} else if (j.body && j.body.path) {\n  raw = j.body.path; trigger = 'webhook';         // Webhook → { body: { path } }\n} else {\n  raw = cfg.MANUAL_PATH; trigger = 'manual';      // Manual Trigger → Config.MANUAL_PATH\n}\nif (!raw) throw new Error('No input path. Set Config.MANUAL_PATH or POST {\"path\": ...} to the webhook.');\n\n// Container path → Windows path (only when the path starts with CONTAINER_INBOX).\nlet winPath = raw;\nconst cInbox = (cfg.CONTAINER_INBOX || '').replace(/\\/+$/, '');\nif (cInbox && raw.startsWith(cInbox + '/')) {\n  const rel = raw.slice(cInbox.length + 1).replace(/\\//g, '\\\\');\n  winPath = cfg.INBOX.replace(/\\\\+$/, '') + '\\\\' + rel;\n}\nconst original = winPath.split(/[\\\\/]/).pop();\nreturn [{ json: { path: winPath, raw_path: raw, original, trigger } }];\n"
+      },
+      "id": "1c064127-a93c-40c5-a857-1426bd9d78e7",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Guard\n`POST /guard` — skips non-video, too-short and already-processed files (sha1 of size+mtime+first MB, idempotent). Skipped runs end at **Skipped**; nothing is moved.",
+        "height": 150,
+        "width": 420,
+        "color": 5
+      },
+      "id": "319441c3-e540-40a6-a117-b962043c2d98",
+      "name": "Note 6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        900,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.RUNNER_URL }}/guard",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { path: $json.path } }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "67121342-fbe6-4089-9103-8af7d3b0f680",
+      "name": "Guard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        120
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a041fbb9-d8e1-4b97-a5e1-cd6d74ef788f",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e09a1548-094d-47ad-bbcd-31bbd8043cf3",
+      "name": "Skip?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        120
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "5a97154e-43cd-444f-8b34-8c4df6b3d81d",
+      "name": "Skipped",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Stages 1–5 — Ingest → Transcribe → Score → Predict → Ollama Verdict\nEvery box is one `POST` to the Windows runner at `Config.RUNNER_URL`. Transcribe can take a while on CPU, so its timeout is 30 min.\n**Ollama Verdict** is the only call allowed to fail: on error the execution takes the red output into **LLM Unavailable**, which passes the Predict candidates through with `llm: null` so review still happens.\nScores are heuristics (energy, onsets, transcript cues) — not view predictions.",
+        "height": 200,
+        "width": 1500,
+        "color": 4
+      },
+      "id": "e8d7eed7-05ab-4734-aa06-ffce82a65bb0",
+      "name": "Note 10",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        -420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.RUNNER_URL }}/ingest",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { path: $('Normalize Input').item.json.path } }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fe6514b0-c230-4401-85aa-c8eeac8cf376",
+      "name": "Ingest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        300
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.RUNNER_URL }}/transcribe",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $('Ingest').item.json.job_id } }}",
+        "options": {
+          "timeout": 1800000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "1b95164c-19aa-4f61-a5e6-359077c350a5",
+      "name": "Transcribe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        300
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.RUNNER_URL }}/score",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $('Ingest').item.json.job_id, target_len: $('Config').item.json.TARGET_LEN_SEC } }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8b30892f-5f6a-45fb-a311-1985e27f3aa4",
+      "name": "Score",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2100,
+        300
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.RUNNER_URL }}/predict",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $('Ingest').item.json.job_id, candidates: $json.candidates } }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "5fc1c324-a13f-433c-b0af-baa5af9a0744",
+      "name": "Predict",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        300
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.RUNNER_URL }}/ollama_verdict",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $('Ingest').item.json.job_id, candidates: $json.candidates } }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "f35b5471-0148-4acb-9492-85ddf9afdff3",
+      "name": "Ollama Verdict",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2700,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ollama Verdict failed (runner down mid-run, Ollama off, timeout...). Keep going without the LLM.\nconst predict = $('Predict').first().json;\nconst err = $input.first().json;\nconst reason = (err && (err.error && (err.error.message || err.error))) || err.message || 'request failed';\nconst candidates = (predict.candidates || []).map(c => ({ ...c, llm: null, llm_error: String(reason) }));\nreturn [{ json: { ok: true, candidates, recommended: predict.recommended, llm_error: String(reason) } }];\n"
+      },
+      "id": "416ff3a2-2765-4c59-aaf8-2c6ca5d871da",
+      "name": "LLM Unavailable",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2700,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Review — build message, pick channel, wait for a human\n`Build Review Message` renders the exact CONTRACT.md text. `Review Channel` switches on `Config.REVIEW_CHANNEL`.\nOnly **telegram** is wired. Discord / Email placeholders are disabled — see the note below them.\n**Telegram Review** = *Send and Wait for Response*, Free Text, Limit Wait Time 24 h. Free Text in n8n means the bot posts a *Respond* button that opens an n8n-hosted form — so your phone must reach the n8n URL (`WEBHOOK_URL`, LAN IP or tunnel). On timeout the node resumes with no `data.text` → **Replied?** goes false → *Timed out*.",
+        "height": 230,
+        "width": 1200,
+        "color": 4
+      },
+      "id": "57c34450-8884-47a4-a9e5-b96f0c07f545",
+      "name": "Note 17",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3000,
+        -420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Produce the review text exactly as CONTRACT.md specifies.\nconst cfg = $('Config').first().json;\nconst ingest = $('Ingest').first().json;\nconst norm = $('Normalize Input').first().json;\nconst transcribe = $('Transcribe').first().json;\nconst inp = $input.first().json;\nconst candidates = inp.candidates || [];\nconst recommended = inp.recommended ?? $('Predict').first().json.recommended ?? null;\n\nfunction hms(sec) {\n  sec = Math.max(0, Math.round(Number(sec) || 0));\n  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;\n  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;\n}\nfunction r0(x) { return Math.round(Number(x) || 0); }\n\nconst lines = [];\nlines.push(`🎬 Personal Clipper — ${norm.original || ingest.source} (${hms(ingest.duration_sec)})`);\nif (transcribe && transcribe.words === 0) lines.push(`(transcription: ${transcribe.note || 'no speech detected'} — scores rely on audio only)`);\nfor (const c of candidates) {\n  const p = c.predict || {};\n  const star = (recommended !== null && c.rank === recommended) ? ' ⭐ recommended' : '';\n  lines.push(`#${c.rank}  score ${r0(p.total)}/100  (hook ${r0(p.hook)} · retention ${r0(p.retention)} · clarity ${r0(p.clarity)} · length ${r0(p.length_fit)})   ${hms(c.start)} → ${hms(c.end)}${star}`);\n  lines.push(`    why: ${c.reason || '-'}`);\n  lines.push(`    fix: ${p.biggest_fix || '-'}`);\n  if (c.llm === null || c.llm === undefined) {\n    lines.push(`    llm: (LLM unavailable: ${c.llm_error || inp.llm_error || 'unknown'})`);\n  } else {\n    const flag = c.llm.agrees === false ? '⚠️ disagrees' : '✅ agrees';\n    const fixTxt = c.llm.fix ? ` — fix: ${c.llm.fix}` : '';\n    lines.push(`    llm: \"${c.llm.verdict || ''}\"${fixTxt} ${flag}`);\n  }\n}\nconst hours = cfg.REVIEW_TIMEOUT_HOURS || 24;\nlines.push(`Reply: a number (e.g. 2), \"2 start 5s earlier\", \"2 end 3s later\", or \"reject all\". No reply in ${hours} h = nothing rendered.`);\n\nreturn [{ json: {\n  text: lines.join('\\n'),\n  job_id: ingest.job_id,\n  job_dir: ingest.job_dir,\n  input: norm.path,\n  original: norm.original,\n  duration_sec: ingest.duration_sec,\n  candidates,\n  recommended,\n} }];\n"
+      },
+      "id": "adf8148a-149a-4e8e-829c-135b55d93442",
+      "name": "Build Review Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "bbd9a258-dac3-4352-a98a-06d91ed4b013",
+                    "leftValue": "={{ $('Config').item.json.REVIEW_CHANNEL }}",
+                    "rightValue": "telegram",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "telegram"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "386ae638-ae41-4406-8863-9e2b1845acd7",
+                    "leftValue": "={{ $('Config').item.json.REVIEW_CHANNEL }}",
+                    "rightValue": "discord",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "discord"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "1ed25978-67ec-4d56-bdfb-84fe39a66a63",
+                    "leftValue": "={{ $('Config').item.json.REVIEW_CHANNEL }}",
+                    "rightValue": "email",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "email"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "8bc9e6d2-cebc-4a80-a2d1-cec7cf547519",
+      "name": "Review Channel",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        3300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
+        "message": "={{ $json.text }}",
+        "responseType": "freeText",
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "limitType": "afterTimeInterval",
+              "resumeAmount": "={{ $('Config').item.json.REVIEW_TIMEOUT_HOURS }}",
+              "resumeUnit": "hours"
+            }
+          }
+        }
+      },
+      "id": "9e410c87-1088-4432-8bd6-a922abe68616",
+      "name": "Telegram Review",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3600,
+        120
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendAndWait",
+        "message": "={{ $json.text }}",
+        "responseType": "approval"
+      },
+      "id": "6687c01e-df97-42cb-88d0-4da3fd66fb2f",
+      "name": "Discord Review (placeholder)",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        420
+      ],
+      "disabled": true,
+      "credentials": {
+        "discordBotApi": {
+          "name": "Personal Clipper Discord Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendAndWait",
+        "sendTo": "you@example.com",
+        "subject": "={{ 'Personal Clipper — ' + $json.original }}",
+        "message": "={{ $json.text }}",
+        "responseType": "freeText"
+      },
+      "id": "0821a1a1-2152-4767-9d31-c4903b58b5f6",
+      "name": "Email Review (placeholder)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3600,
+        620
+      ],
+      "disabled": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Personal Clipper Gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "### Swapping the review channel\nSet `Config.REVIEW_CHANNEL` and wire ONE branch of `Review Channel` into `Replied?`.\n\n**Discord**: create a bot in the Discord Developer Portal, add a *Discord Bot* credential, enable the node, set Server/Channel. Discord Send-and-Wait supports *approval* (buttons) only — free-text offsets are not available, so the reply you get is `{ data: { approved: true|false } }`; adapt `Parse Reply` to treat approved = recommended rank.\n\n**Email**: add a *Gmail OAuth2* credential, enable the node, set *Send To*. Gmail Send-and-Wait supports *free text*, and the output is the same `{ data: { text } }` shape, so `Parse Reply` works unchanged.\n\nBoth placeholders are disabled and unwired on purpose. Do not wire all three.",
+        "height": 330,
+        "width": 560,
+        "color": 6
+      },
+      "id": "23790c12-9f9a-429d-8654-33a4c6d4456f",
+      "name": "Note 23",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3560,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "068a5137-10fb-4831-bba2-6c14ab23d13f",
+              "leftValue": "={{ $json.data && $json.data.text ? $json.data.text : '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6c008788-fa55-4892-a44e-bed51f0baa2c",
+      "name": "Replied?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3900,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ '⏱ Personal Clipper — no reply in ' + $('Config').item.json.REVIEW_TIMEOUT_HOURS + ' h for ' + $('Build Review Message').item.json.original + '. Nothing rendered. Working files kept at ' + $('Build Review Message').item.json.job_dir }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "d5922d4a-46be-4729-9c78-47b234edf4d6",
+      "name": "Telegram: Timed Out",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4200,
+        -80
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "ae856efe-5bef-4bf8-9c3f-cb4fd38fea43",
+      "name": "Timed out — nothing rendered",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4500,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Parse Reply\nGrammar (case-insensitive): `^(\\d)(?:\\s*(?:start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?)*$|^reject all$`\nExamples: `2` · `2 start 5s earlier` · `2 end 3s later` · `1 start 2s later end 4s later` · `reject all`.\nOffsets are applied to the chosen candidate's start/end and clamped to `[0, duration]`. `reject all` → Telegram notice → end. Unparseable → Telegram notice → end (nothing rendered).",
+        "height": 190,
+        "width": 900,
+        "color": 4
+      },
+      "id": "de0ee2e8-1025-4b77-8ada-c3e0410a5a65",
+      "name": "Note 27",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4200,
+        -420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Implements the CONTRACT.md reply grammar.\nconst review = $('Build Review Message').first().json;\nconst cfg = $('Config').first().json;\nconst raw = String(($input.first().json.data || {}).text || '').trim();\nconst text = raw.toLowerCase().replace(/\\s+/g, ' ');\nconst duration = Number(review.duration_sec) || 0;\n\nconst GRAMMAR = /^(\\d)(?:\\s*(?:start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?)*$|^reject all$/i;\n\nconst base = { reply: raw, job_id: review.job_id, job_dir: review.job_dir, input: review.input,\n               original: review.original, candidates: review.candidates };\n\nif (text === 'reject all') return [{ json: { ...base, action: 'reject' } }];\nif (!GRAMMAR.test(text)) return [{ json: { ...base, action: 'invalid', error: `Could not parse reply \"${raw}\"` } }];\n\nconst rank = Number(text.match(/^(\\d)/)[1]);\nconst cand = (review.candidates || []).find(c => Number(c.rank) === rank);\nif (!cand) return [{ json: { ...base, action: 'invalid', error: `No candidate #${rank}` } }];\n\nlet start = Number(cand.start), end = Number(cand.end);\nconst clauseRe = /(start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?/g;\nlet m;\nwhile ((m = clauseRe.exec(text)) !== null) {\n  const which = m[1];\n  let delta = parseFloat(m[2]);\n  const dir = m[3];\n  if (dir === 'earlier') delta = -Math.abs(delta);\n  else if (dir === 'later') delta = Math.abs(delta);\n  // no direction word: signed number is taken literally (+ = later, - = earlier)\n  if (which === 'start') start += delta; else end += delta;\n}\nconst clamp = v => Math.min(Math.max(0, v), duration || v);\nstart = clamp(start); end = clamp(end);\nif (end <= start) return [{ json: { ...base, action: 'invalid', error: `Window collapsed (start ${start}s ≥ end ${end}s)` } }];\n\nreturn [{ json: { ...base, action: 'render', rank, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)),\n                  duration: Number((end - start).toFixed(3)), candidate: { ...cand, start, end },\n                  captions: cfg.CAPTIONS !== false, offset: cfg.RENDER_OFFSET, audio_mode: cfg.AUDIO_MODE, volume: cfg.VOLUME } }];\n"
+      },
+      "id": "a3fd9d22-6738-4faa-b8d5-781563efb429",
+      "name": "Parse Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4200,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3627c140-2a5e-45e2-b81d-65428bf53ce5",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "render",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "render"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "18c33d19-5c96-4a76-b319-c40b1011815d",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "reject",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reject"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ec3eefa3-0ea8-4af7-84a9-10ea8bbccff8",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "invalid",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "invalid"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "6bfad29a-1bfb-4029-9f51-16f83c05c1d6",
+      "name": "Reply Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        4500,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ '🚫 Nothing rendered, working files kept at ' + $json.job_dir }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a57630b1-bda1-4ed1-be0e-5753dc214a6e",
+      "name": "Telegram: Rejected",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4800,
+        360
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "b3e18c4d-8e80-42f4-b304-d11fea9d2901",
+      "name": "Rejected — nothing rendered",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        5100,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ '❓ ' + $json.error + '. Nothing rendered, working files kept at ' + $json.job_dir + '. Reply formats: a number, \"2 start 5s earlier\", \"2 end 3s later\", or \"reject all\".' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "cedfb7a1-a7c0-4751-b418-2516c9ede2bf",
+      "name": "Telegram: Bad Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4800,
+        560
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "048bb0e6-f478-48c1-9c83-9e8e98fc523f",
+      "name": "Bad reply — nothing rendered",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        5100,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Stages 6–7 — Render → Package → Deliver → Log\n`/render` runs `src\\main.py --preset shorts` with safe-zone `captions.ass` (30 min timeout). `/package` builds the `*_capcut\\` folder (clip, captions.srt, transcript, EditPilot prompts, steps, social copy). Deliver posts the result to Telegram. `/log` appends to `runs.jsonl` and marks the file processed.\nNothing is uploaded or posted anywhere — you do that by hand.",
+        "height": 170,
+        "width": 1100,
+        "color": 4
+      },
+      "id": "afaac0dd-2d25-4ba5-8537-222e369a5c77",
+      "name": "Note 34",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4800,
+        -420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.RUNNER_URL }}/render",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $json.job_id, rank: $json.rank, start: $json.start, end: $json.end, captions: $json.captions, offset: $json.offset, audio_mode: $json.audio_mode, volume: $json.volume } }}",
+        "options": {
+          "timeout": 1800000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "67c85a1a-90a6-42de-8a98-db61ef43d932",
+      "name": "Render",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4800,
+        120
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.RUNNER_URL }}/package",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $('Parse Reply').item.json.job_id, rank: $('Parse Reply').item.json.rank, output: $json.output, candidate: $('Parse Reply').item.json.candidate } }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "b9446ed7-c848-448a-ac7e-edc3f0ddd2c1",
+      "name": "Package",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5100,
+        120
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ '✅ Rendered ' + $('Parse Reply').item.json.original + ' → clip #' + $('Parse Reply').item.json.rank + '\\n' + 'Output: ' + $('Render').item.json.output + '\\n' + 'Score: ' + ($('Parse Reply').item.json.candidate.predict ? $('Parse Reply').item.json.candidate.predict.total : '?') + '/100   ' + $('Parse Reply').item.json.start + 's → ' + $('Parse Reply').item.json.end + 's (' + $('Parse Reply').item.json.duration + 's)\\n' + 'Encoder: ' + $('Render').item.json.encoder + '\\n' + 'CapCut package: ' + $json.package_dir }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "837352de-152b-4f55-aa83-045cdb0e8298",
+      "name": "Telegram: Delivered",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        5400,
+        120
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.RUNNER_URL }}/log",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $('Parse Reply').item.json.job_id, input: $('Parse Reply').item.json.input, candidates: $('Parse Reply').item.json.candidates, approved: { rank: $('Parse Reply').item.json.rank, start: $('Parse Reply').item.json.start, end: $('Parse Reply').item.json.end, reply: $('Parse Reply').item.json.reply }, output: $('Render').item.json.output, package_dir: $('Package').item.json.package_dir, status: 'delivered' } }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "a223f94c-b834-4621-ba36-649a59ac1710",
+      "name": "Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5700,
+        120
+      ],
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {},
+      "id": "eafd9dfd-abed-400a-be9f-863a2b7cb735",
+      "name": "Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        6000,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Local File Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard": {
+      "main": [
+        [
+          {
+            "node": "Skip?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip?": {
+      "main": [
+        [
+          {
+            "node": "Skipped",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ingest": {
+      "main": [
+        [
+          {
+            "node": "Transcribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe": {
+      "main": [
+        [
+          {
+            "node": "Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score": {
+      "main": [
+        [
+          {
+            "node": "Predict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Predict": {
+      "main": [
+        [
+          {
+            "node": "Ollama Verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Verdict": {
+      "main": [
+        [
+          {
+            "node": "Build Review Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "LLM Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Unavailable": {
+      "main": [
+        [
+          {
+            "node": "Build Review Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Message": {
+      "main": [
+        [
+          {
+            "node": "Review Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Channel": {
+      "main": [
+        [
+          {
+            "node": "Telegram Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Discord Review (placeholder)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Review (placeholder)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Review": {
+      "main": [
+        [
+          {
+            "node": "Replied?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replied?": {
+      "main": [
+        [
+          {
+            "node": "Parse Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: Timed Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Timed Out": {
+      "main": [
+        [
+          {
+            "node": "Timed out — nothing rendered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Reply": {
+      "main": [
+        [
+          {
+            "node": "Reply Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Action": {
+      "main": [
+        [
+          {
+            "node": "Render",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: Bad Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Rejected": {
+      "main": [
+        [
+          {
+            "node": "Rejected — nothing rendered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Bad Reply": {
+      "main": [
+        [
+          {
+            "node": "Bad reply — nothing rendered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render": {
+      "main": [
+        [
+          {
+            "node": "Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Package": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Delivered": {
+      "main": [
+        [
+          {
+            "node": "Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "personal-clipper"
+  },
+  "tags": []
+}

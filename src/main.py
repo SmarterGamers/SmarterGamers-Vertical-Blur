@@ -58,6 +58,7 @@ def run_cli(args):
         duration_sec=args.duration,
         enable_hwaccel=args.hwaccel,
         output_dir=out_dir,
+        captions_path=Path(args.captions) if args.captions else None,
     )
 
     batch = BatchProcessor(engine)
@@ -123,6 +124,7 @@ def main():
     parser.add_argument("--volume", type=float, default=0.0, help="Audio volume gain in dB (e.g. 3.0 or -3.0)")
     parser.add_argument("--hwaccel", action="store_true", help="Enable GPU hardware decoding")
     parser.add_argument("-o", "--output-dir", type=str, default=None, help="Output destination folder")
+    parser.add_argument("--captions", type=str, default=None, help="Optional .ass/.srt subtitle file to burn in")
     parser.add_argument("--cli", action="store_true", help="Force headless CLI mode")
     parser.add_argument("--classic", action="store_true", help="Launch lightweight Classic single-file GUI")
 
