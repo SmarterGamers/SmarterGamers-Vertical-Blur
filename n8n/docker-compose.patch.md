@@ -32,16 +32,10 @@ existing `environment:` list add:
 If you would rather keep Execute Command off, use `- NODES_EXCLUDE=["n8n-nodes-base.executeCommand"]`
 instead.
 
-## 3. (Optional) WEBHOOK_URL so the Telegram "Respond" button works from your phone
+## 3. WEBHOOK_URL — not needed
 
-Telegram *Send and Wait* with a free-text reply posts a **Respond** button that opens a small
-n8n-hosted form. Your phone must be able to reach n8n at that URL. With n8n bound to
-`127.0.0.1:5678` that only works from the PC itself. Either answer from the PC's browser, or expose
-n8n on the LAN / a tunnel and set:
-
-```yaml
-      - WEBHOOK_URL=http://<your-pc-lan-ip>:5678/     # ADD only if you want to reply from your phone
-```
+The review reply is read by polling Telegram's `getUpdates` from inside the container, so n8n
+needs no public URL and can stay on `127.0.0.1:5678`. Leave `WEBHOOK_URL` unset.
 
 ## 4. host.docker.internal (only if you are NOT on Docker Desktop)
 

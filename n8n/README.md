@@ -7,7 +7,7 @@ anything.
 
 ```
 VOD dropped in Inbox ─▶ guard ─▶ ingest ─▶ transcribe ─▶ score ─▶ predict ─▶ Ollama opinion
-        ─▶ Telegram review message ─▶ (you reply "2" or "2 start 5s earlier" …)
+        ─▶ Telegram review message ─▶ (you reply "2" or "2 start 5s earlier" … as a plain chat message)
         ─▶ render ─▶ CapCut package ─▶ Telegram "done" ─▶ runs.jsonl
 ```
 
@@ -70,6 +70,8 @@ From inside the container the same check is
 3. Get your chat id: open
    `https://api.telegram.org/bot<TOKEN>/getUpdates` in a browser and read `"chat":{"id":123456789}`.
    (Or message **@userinfobot**.)
+4. Do **not** set a webhook for this bot (no n8n *Telegram Trigger*); the workflow reads your
+   replies with `getUpdates`, which Telegram refuses while a webhook exists.
 
 ## 5. n8n credentials (names matter)
 
@@ -77,7 +79,7 @@ In n8n → *Credentials* → *Add*:
 
 | credential type | name it exactly | used by |
 |---|---|---|
-| Telegram API | `Personal Clipper Bot` | every Telegram node in both workflows |
+| Telegram API | `Personal Clipper Bot` | every Telegram node in both workflows (the `getUpdates` poll uses `Config.TELEGRAM_BOT_TOKEN` instead, see §8) |
 | Discord Bot API | `Personal Clipper Discord Bot` | only if you switch review to Discord (placeholder) |
 | Gmail OAuth2 | `Personal Clipper Gmail` | only if you switch review to Email (placeholder) |
 
@@ -87,8 +89,9 @@ and confirm the credential is selected.
 ## 6. Import the workflows
 
 1. *Workflows* → *Create* → ⋯ → **Import from file** → `personal-clipper-workflow.json`.
-2. Open the **Config** node and set `TELEGRAM_CHAT_ID`. Everything else has the CONTRACT.md
-   defaults; change paths here and only here.
+2. Open the **Config** node and set `TELEGRAM_CHAT_ID` and `TELEGRAM_BOT_TOKEN` (the BotFather
+   token, used by the `getUpdates` poll — see §8). Everything else has the CONTRACT.md defaults;
+   change paths here and only here.
 3. Import `personal-clipper-error-handler.json` the same way and set its **Error Config** →
    `TELEGRAM_CHAT_ID`. Save it.
 4. Back in *Personal Clipper*: *Settings* (top right ⋯) → **Error workflow** → pick
@@ -100,8 +103,8 @@ and confirm the credential is selected.
 ## 7. First run, by hand
 
 Option A — the Manual Trigger: set `Config.MANUAL_PATH` to a VOD that is already in
-`C:\SmarterGamers\Clips\Inbox`, click **Execute workflow**. The execution pauses at *Telegram Review*
-until you answer.
+`C:\SmarterGamers\Clips\Inbox`, click **Execute workflow**. The execution loops at *Wait 20s* →
+*Telegram: getUpdates* until you answer in the chat.
 
 Option B — the webhook (works from the PC):
 
@@ -127,7 +130,7 @@ You receive something like:
 Reply: a number (e.g. 2), "2 start 5s earlier", "2 end 3s later", or "reject all". No reply in 24 h = nothing rendered.
 ```
 
-Tap **Respond** (n8n's free-text reply opens a tiny form) and type one of:
+Just answer in the chat, as a normal message to the bot (no button, no form), with one of:
 
 | reply | effect |
 |---|---|
@@ -143,9 +146,31 @@ Offsets are clamped to `0 … source duration`. If the reply does not match the 
 clip differently from the heuristics; `(LLM unavailable: …)` means Ollama was down and the run
 continued without it.
 
-> The **Respond** button opens a page on your n8n instance. With n8n bound to `127.0.0.1:5678`
-> that page only loads on the PC. To reply from your phone, set `WEBHOOK_URL` to a LAN IP or
-> tunnel (see `docker-compose.patch.md` §3).
+### How the reply reaches n8n (and why there is no "Respond" button)
+
+n8n's Telegram *Send and Wait* node posts a **Respond** button whose link has to be a public
+URL — Telegram's Bot API rejects `localhost` / `127.0.0.1` links with `Wrong HTTP URL`, and this
+n8n is deliberately bound to `127.0.0.1:5678`. So the workflow does not use Send-and-Wait at all:
+
+- **Telegram: Send Review** is a plain `sendMessage`.
+- The execution then loops **Wait 20s → Telegram: getUpdates → Find Reply** until it sees a
+  message from `Config.TELEGRAM_CHAT_ID` that is newer than the review message, or until
+  `Config.REVIEW_TIMEOUT_HOURS` has passed. `getUpdates` is an outbound HTTPS call from the
+  container to `api.telegram.org`; nothing has to reach n8n.
+- You can reply from your phone anywhere; the reply is picked up on the next poll, so expect
+  up to ~20 s before the render starts. If you send several messages, the newest one counts.
+
+Two things this needs:
+
+1. **`Config.TELEGRAM_BOT_TOKEN`** must hold the BotFather token. n8n's HTTP Request node cannot
+   read the token out of the *Telegram API* credential (the token sits in the URL path, and
+   `$credentials` is not available in expressions), so the poll node takes it from `Config`.
+   The shipped JSON has the placeholder `REPLACE_WITH_BOT_TOKEN`. It is the same token you put
+   in the credential; the `Config` node is inside your local n8n database only.
+2. **The bot must have no webhook set.** `getUpdates` returns HTTP 409 while a webhook is
+   registered. This setup never uses an n8n *Telegram Trigger* (which would register one). If you
+   ever did, or used the bot elsewhere, clear it once:
+   `https://api.telegram.org/bot<TOKEN>/deleteWebhook` in a browser.
 
 ## 9. After the render
 
@@ -200,9 +225,10 @@ re-run a VOD.
 | Transcribe says `device: cpu` and takes ages | CUDA build of ctranslate2 not found; CPU still works, which is why the node timeout is 30 min. |
 | Local File Trigger does not appear in the node list | n8n 2.x disabled it. Add `NODES_EXCLUDE=[]` to the compose environment, `docker compose up -d`. |
 | Trigger fires once, then never | host→container file events are flaky; the node already uses polling + awaitWriteFinish. Confirm the mount: `docker exec n8n ls /data/clips/Inbox`. |
-| Nothing after 24 h | the review timed out: the execution resumes with an empty reply, sends "no reply in 24 h … nothing rendered", and ends. The working files stay in `Working\<job_id>\`. Re-run the VOD by removing its entry from `processed.json` and re-dropping it, or use the webhook. |
+| Nothing after 24 h | the review timed out: the poll loop reached `REVIEW_TIMEOUT_HOURS`, sent "no reply in 24 h … nothing rendered", and ended. The working files stay in `Working\<job_id>\`. Re-run the VOD by removing its entry from `processed.json` and re-dropping it, or use the webhook. |
 | `(LLM unavailable: …)` in the review | Ollama is off or the model is missing: `ollama pull llama3.2:latest`. The run continues without the LLM opinion. |
-| Telegram "Respond" link does not open on the phone | n8n is only on 127.0.0.1. Reply from the PC, or set `WEBHOOK_URL` (compose patch §3). |
+| Review message arrives but my reply is ignored | `Config.TELEGRAM_BOT_TOKEN` still says `REPLACE_WITH_BOT_TOKEN` (the poll gets 404 `Not Found`), the reply came from a different chat than `TELEGRAM_CHAT_ID`, or the bot has a webhook set (`getUpdates` → 409 — open `https://api.telegram.org/bot<TOKEN>/deleteWebhook` once). Open the execution and look at the *Telegram: getUpdates* output; *Find Reply* also puts the API error into `poll_error`. |
+| Reply takes a while to act | expected: the loop polls every 20 s. |
 | Error workflow never fires | it only fires for active (production) executions, and only after you set it under *Settings → Error workflow*. |
 | Guard says `already_processed` | the file hash is in `processed.json`. Remove the entry to re-run. |
 

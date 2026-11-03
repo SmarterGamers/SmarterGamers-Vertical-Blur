@@ -166,8 +166,9 @@ for a second opinion. The workflow then renders the window you pick with this ed
 transcript, EditPilot prompts, step list, social copy) next to the output.
 
 **Human in the loop:** nothing is rendered until you reply on Telegram. The bot posts the five
-candidates with scores and reasons; you answer `2`, `2 start 5s earlier`, `2 end 3s later`, or
-`reject all`. No reply within 24 h means nothing is rendered. Every run is logged to
+candidates with scores and reasons; you answer with a plain chat message — `2`,
+`2 start 5s earlier`, `2 end 3s later`, or `reject all` — from any device (the workflow polls the
+Bot API for your reply, so n8n needs no public URL). No reply within 24 h means nothing is rendered. Every run is logged to
 `C:\SmarterGamers\Clips\runs.jsonl`. The workflow never uploads or posts anywhere.
 
 **Setup:** everything is in [`n8n/README.md`](n8n/README.md) — compose mount, runner, Telegram bot,
