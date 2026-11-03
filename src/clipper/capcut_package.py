@@ -15,6 +15,7 @@ Creates ``READY\\<original>_clip<rank>_<len>s_capcut\\`` containing:
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -45,7 +46,7 @@ def _heuristic_prompts(candidate: Dict[str, Any], clip_rel_words: Sequence[Dict[
     peak = (candidate.get("signals") or {}).get("peak_at", 0.0)
 
     lines = [
-        "# EditPilot prompts (heuristic fallback)",
+        "# EditPilot prompts",
         "",
         f"_{why}_",
         "",
@@ -82,37 +83,69 @@ def _heuristic_prompts(candidate: Dict[str, Any], clip_rel_words: Sequence[Dict[
 
 def build_editpilot_prompts(cfg: ClipperConfig, candidate: Dict[str, Any],
                             clip_rel_words: Sequence[Dict[str, Any]], duration: float) -> str:
+    """Build editpilot-prompts.md.
+
+    The deterministic prompts (``_heuristic_prompts``) are ALWAYS written first: their
+    timestamps come straight from the clip's own lull/peak data, so they are never generic.
+    Ollama is then asked for extra, imperative editing instructions. Each LLM line is kept
+    only if it is an editing instruction that cites a concrete clip timestamp; anything
+    else (captions-style filler, vague advice) is dropped, and if fewer than two survive
+    the file says so and carries the heuristic prompts alone.
+    """
     pred = candidate.get("predict") or {}
+    base = _heuristic_prompts(candidate, clip_rel_words, duration,
+                              why="Deterministic prompts from this clip's own timestamps (always included).")
     transcript = " ".join(w["word"] for w in clip_rel_words)[:1200]
-    system = ("You write CapCut EditPilot prompts for a 9:16 gaming Short. Reply ONLY with JSON: "
-              '{"hook_text": "<=8 words", "prompts": ["<prompt 1>", "<prompt 2>", "<prompt 3>", "<prompt 4>"], '
-              '"notes": "<one sentence>"}. Every prompt must reference a concrete timestamp from the data.')
+    first_words = " ".join(w["word"] for w in clip_rel_words[:8]).strip()
+    system = (
+        "You write edit instructions for CapCut's EditPilot for ONE 9:16 gaming Short. "
+        "Each instruction is one imperative sentence an editor executes on the timeline "
+        "(trim, cut, zoom, add text, speed-ramp, duck audio, add transition, add sound effect), "
+        "and MUST name a clip timestamp as m:ss taken from the data (lulls, peak_at, hook, first words). "
+        "Never write captions, hype lines, or descriptions of the clip. "
+        'Reply ONLY with JSON: {"hook_text": "<on-screen hook, <=6 words, quoting or paraphrasing the first words>", '
+        '"prompts": ["<instruction 1>", "<instruction 2>", "<instruction 3>", "<instruction 4>"]}'
+    )
     user = json.dumps({
         "duration_s": round(duration, 1),
-        "reason": candidate.get("reason"),
+        "first_words_0_to_2s": first_words,
+        "picked_because": candidate.get("reason"),
         "biggest_fix": pred.get("biggest_fix"),
-        "lulls": pred.get("lulls"),
+        "lulls_to_cut": [{"start": _fmt(l["start"]), "end": _fmt(l["end"])} for l in (pred.get("lulls") or [])[:3]],
+        "peak_at": _fmt((candidate.get("signals") or {}).get("peak_at", 0.0)),
         "score": {k: pred.get(k) for k in ("total", "hook", "retention", "clarity", "length_fit")},
         "transcript": transcript,
     })
+    verbs = ("trim", "cut", "zoom", "punch", "add", "duck", "lower", "raise", "speed", "slow",
+             "freeze", "transition", "insert", "remove", "keep", "mute", "boost", "overlay", "place")
+    ts_re = re.compile(r"\b\d{1,2}:\d{2}\b")
     try:
         out = chat_json(cfg.OLLAMA_URL, cfg.OLLAMA_MODEL, system, user, timeout=cfg.OLLAMA_TIMEOUT_SEC)
-        prompts = out.get("prompts") or []
-        if not isinstance(prompts, list) or not prompts:
+        raw = out.get("prompts") if isinstance(out, dict) else None
+        if not isinstance(raw, list):
             raise OllamaError("Ollama JSON had no 'prompts' list")
-        body = [f"# EditPilot prompts ({cfg.OLLAMA_MODEL})", "",
-                f"Clip: 0:00 → {_fmt(duration)} ({duration:.0f} s). Why: {candidate.get('reason')}",
-                f"Biggest fix (heuristic): {pred.get('biggest_fix')}", "",
-                f'**Hook text:** "{out.get("hook_text", "")}"', ""]
-        for i, p in enumerate(prompts, 1):
-            body.append(f"{i}. {p}")
-        if out.get("notes"):
-            body += ["", f"_Note: {out['notes']}_"]
-        body.append("")
-        return "\n".join(body)
+        kept, dropped = [], 0
+        for p in raw:
+            text = str(p).strip().strip("<>").strip()
+            low = text.lower()
+            if ts_re.search(text) and any(v in low for v in verbs) and len(text) > 20:
+                kept.append(text)
+            else:
+                dropped += 1
+        hook = str(out.get("hook_text") or "").strip().strip("<>")
+        extra = ["", f"## Extra suggestions from {cfg.OLLAMA_MODEL}"]
+        if hook:
+            extra.append(f'- Alternative hook text: "{hook[:60]}"')
+        if len(kept) >= 2:
+            extra += [f"- {t}" for t in kept]
+            if dropped:
+                extra.append(f"- _({dropped} suggestion(s) dropped: not a timestamped edit instruction.)_")
+        else:
+            extra.append(f"- _Ollama returned {len(raw)} line(s) but only {len(kept)} were timestamped edit "
+                         "instructions, so only the deterministic prompts above are offered._")
+        return base + "\n".join(extra) + "\n"
     except OllamaError as exc:
-        return _heuristic_prompts(candidate, clip_rel_words, duration,
-                                  why=f"Ollama failed ({exc}); these prompts were generated heuristically from the clip data.")
+        return base + f"\n## Extra suggestions\n- _Ollama failed ({exc}); only the deterministic prompts above are offered._\n"
 
 
 # ------------------------------------------------------------------ capcut-steps.md

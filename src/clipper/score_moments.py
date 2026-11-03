@@ -94,7 +94,10 @@ def collect_signals(source: Path, v1_path: Optional[Path] = None,
     if mod is not None:
         try:
             v1_pcm = mod.extract_audio_pcm(str(source), start_s=0.0, duration_s=None, sample_rate=sample_rate)
-            raw_onsets = mod.compute_audio_onsets(v1_pcm, sample_rate=sample_rate, onset_z=2.5)
+            raw = mod.compute_audio_onsets(v1_pcm, sample_rate=sample_rate, onset_z=2.5)
+            # v1 returns (onset_timestamps, frame_times, z_scores); older builds may return
+            # just the timestamps, so accept both shapes.
+            raw_onsets = raw[0] if isinstance(raw, tuple) and len(raw) == 3 else raw
             onsets = [float(t) for t in list(raw_onsets)]
             try:
                 events = [_jsonable(e) for e in list(mod.detect_events(raw_onsets, min_onsets=5, merge_gap=6.0))]
