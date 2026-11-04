@@ -67,6 +67,7 @@
     },
     {
       "parameters": {
+        "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $json.chat_id }}",
         "text": "={{ $json.text }}",

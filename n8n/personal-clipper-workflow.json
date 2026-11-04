@@ -599,6 +599,7 @@
     },
     {
       "parameters": {
+        "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
         "text": "={{ $json.text }}",
@@ -877,6 +878,7 @@
     },
     {
       "parameters": {
+        "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
         "text": "={{ '⏱ Personal Clipper — no reply in ' + $('Config').item.json.REVIEW_TIMEOUT_HOURS + ' h for ' + $('Build Review Message').first().json.original + '. Nothing rendered. Working files kept at ' + $('Build Review Message').first().json.job_dir }}",
@@ -1031,6 +1033,7 @@
     },
     {
       "parameters": {
+        "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
         "text": "={{ '🚫 Nothing rendered, working files kept at ' + $json.job_dir }}",
@@ -1065,6 +1068,7 @@
     },
     {
       "parameters": {
+        "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
         "text": "={{ '❓ ' + $json.error + '. Nothing rendered, working files kept at ' + $json.job_dir + '. Reply formats: a number, \"2 start 5s earlier\", \"2 end 3s later\", or \"reject all\".' }}",
@@ -1167,6 +1171,7 @@
     },
     {
       "parameters": {
+        "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
         "text": "={{ '✅ Rendered ' + $('Parse Reply').item.json.original + ' → clip #' + $('Parse Reply').item.json.rank + '\\n' + 'Output: ' + $('Render').item.json.output + '\\n' + 'Score: ' + ($('Parse Reply').item.json.candidate.predict ? $('Parse Reply').item.json.candidate.predict.total : '?') + '/100   ' + $('Parse Reply').item.json.start + 's → ' + $('Parse Reply').item.json.end + 's (' + $('Parse Reply').item.json.duration + 's)\\n' + 'Encoder: ' + $('Render').item.json.encoder + '\\n' + 'CapCut package: ' + $json.package_dir }}",
