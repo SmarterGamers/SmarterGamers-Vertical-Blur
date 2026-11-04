@@ -147,7 +147,7 @@ def _window_words(words: Sequence[Dict[str, Any]], start: float, end: float) -> 
     return [w for w in words if w["start"] >= start and w["start"] < end]
 
 
-def _inside_speech(t: float, win_words: Sequence[Dict[str, Any]], margin: float = 0.15) -> bool:
+def _inside_speech(t: float, win_words: Sequence[Dict[str, Any]], margin: float = 0.03) -> bool:
     """True when time ``t`` falls inside (or within ``margin`` s of) a spoken word."""
     for w in win_words:
         if w["start"] - margin <= t <= w["end"] + margin:
@@ -342,6 +342,8 @@ def score_moments(words: Sequence[Dict[str, Any]], rms: Sequence[float], duratio
             "signals": {
                 "audio_energy": round(energy, 4), "onsets": len(onsets_in),
                 "speech_onsets": speech_onsets, "v1_events": len(v1_events_in),
+                "onset_times": [round(t, 2) for t in onsets_in],
+                "firefight_peak_abs": (float(v1_events_in[0].get("peak", v1_events_in[0]["start"])) if v1_events_in else None),
                 "speech_density": round(speech_density, 3), "exclaim": round(exclaim_score, 4),
                 "pacing": round(pacing, 3), "peak_at": peak_at, "first_hit": round(first_hit, 2),
                 "hook_pos": round(hook_pos, 3), "payoff_words": len(payoff_hits),

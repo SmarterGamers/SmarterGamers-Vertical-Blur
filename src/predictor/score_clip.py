@@ -63,9 +63,18 @@ def clip_words(words: Sequence[Dict[str, Any]], start: float, end: float) -> Lis
 
 # ------------------------------------------------------------------ hook
 def score_hook(rel_words: Sequence[Dict[str, Any]], rel_rms: Sequence[float],
-               hop_s: float = 0.1) -> Tuple[int, Dict[str, Any]]:
-    """0-40. Looks only at the first HOOK_WINDOW_S seconds."""
+               hop_s: float = 0.1, action: Optional[Dict[str, Any]] = None) -> Tuple[int, Dict[str, Any]]:
+    """0-40. Looks only at the first HOOK_WINDOW_S seconds.
+
+    ``action`` (optional) = ``{"onsets": [clip-relative seconds], "firefight_at": seconds|None}`` from the
+    moment scorer. For gameplay a fight opening cold on gunfire IS a hook, so action in the first
+    2 s earns points even with no commentary, and a silent-but-active open is not penalised.
+    """
     first = [w for w in rel_words if w["start"] < HOOK_WINDOW_S]
+    act = action or {}
+    early_hits = [t for t in (act.get("onsets") or []) if 0.0 <= t < HOOK_WINDOW_S]
+    ff_at = act.get("firefight_at")
+    action_open = bool(early_hits) or (ff_at is not None and ff_at < 4.0)
     text = " ".join(_norm(w["word"]) for w in first)
     toks = [_norm(w["word"]) for w in first]
     notes: Dict[str, Any] = {}
@@ -91,11 +100,16 @@ def score_hook(rel_words: Sequence[Dict[str, Any]], rel_rms: Sequence[float],
         pts += 3
     notes["hook_energy_ratio"] = round(ratio, 3)
 
-    # penalties
-    if not first:
+    # action in the hook window (gameplay clips): up to +16
+    if action_open:
+        pts += min(16, 8 + 4 * len(early_hits))
+        notes["action_open"] = {"early_hits": len(early_hits), "firefight_at": ff_at}
+
+    # penalties — silence is only a problem when there is no action either
+    if not first and not action_open:
         pts -= 10
         notes["silent_open"] = True
-    elif first[0]["start"] > 1.0:
+    elif first and first[0]["start"] > 1.0 and not action_open:
         pts -= 5
         notes["late_first_word"] = first[0]["start"]
     intro_hit = next((pat for pat in INTRO_PATTERNS if re.search(pat, text)), None)
@@ -113,18 +127,22 @@ def score_hook(rel_words: Sequence[Dict[str, Any]], rel_rms: Sequence[float],
 
 # ------------------------------------------------------------------ retention
 def find_lulls(rel_words: Sequence[Dict[str, Any]], rel_rms: Sequence[float], duration: float,
-               hop_s: float = 0.1, dead_air_s: float = DEAD_AIR_S) -> List[Dict[str, float]]:
+               hop_s: float = 0.1, dead_air_s: float = DEAD_AIR_S,
+               action_onsets: Optional[Sequence[float]] = None) -> List[Dict[str, float]]:
     """Gaps > ``dead_air_s`` with no speech AND low audio energy (clip-relative)."""
     clip_mean = _mean(rel_rms) if rel_rms else 0.0
     edges = [0.0] + [w["start"] for w in rel_words] + [duration]
     ends = [0.0] + [w["end"] for w in rel_words] + [duration]
     lulls: List[Dict[str, float]] = []
     # candidate gaps between consecutive words (and clip edges)
+    onsets = sorted(action_onsets or [])
     for i in range(1, len(edges)):
         gap_start = ends[i - 1]
         gap_end = edges[i]
         if gap_end - gap_start <= dead_air_s:
             continue
+        if any(gap_start <= t <= gap_end for t in onsets):
+            continue  # gunfire / impacts fill the gap: not dead air
         if rel_rms:
             seg = rel_rms[int(gap_start / hop_s): int(gap_end / hop_s)]
             if seg and clip_mean > 0 and _mean(seg) > clip_mean * 2.0:
@@ -135,10 +153,11 @@ def find_lulls(rel_words: Sequence[Dict[str, Any]], rel_rms: Sequence[float], du
 
 
 def score_retention(rel_words: Sequence[Dict[str, Any]], rel_rms: Sequence[float], duration: float,
-                    hop_s: float = 0.1) -> Tuple[int, List[Dict[str, float]], Dict[str, Any]]:
-    """0-30. Dead air, filler words and energy lulls."""
+                    hop_s: float = 0.1, action_onsets: Optional[Sequence[float]] = None
+                    ) -> Tuple[int, List[Dict[str, float]], Dict[str, Any]]:
+    """0-30. Dead air, filler words and energy lulls. Game action counts as content, not dead air."""
     pts = 30.0
-    lulls = find_lulls(rel_words, rel_rms, duration, hop_s)
+    lulls = find_lulls(rel_words, rel_rms, duration, hop_s, action_onsets=action_onsets)
     dead_total = sum(l["end"] - l["start"] for l in lulls)
     pts -= min(18, 4 * len(lulls) + 2 * dead_total)
     fillers = [w for w in rel_words if _norm(w["word"]) in FILLERS]
@@ -243,14 +262,22 @@ def biggest_fix(hook: int, retention: int, clarity: int, length_fit: int,
 
 def predict_candidate(words: Sequence[Dict[str, Any]], rms: Sequence[float], start: float, end: float,
                       hop_s: float = 0.1, target_len: float = 30.0, source_w: int = 1920,
-                      source_h: int = 1080) -> Dict[str, Any]:
-    """Full prediction for one window. Pure."""
+                      source_h: int = 1080, signals: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Full prediction for one window. Pure.
+
+    ``signals``: ``{"onset_times": [abs seconds of non-speech action onsets], "firefight_peak_abs": s|None}``.
+    """
     duration = max(0.0, end - start)
     rel_words = clip_words(words, start, end)
     rel_rms = list(rms[int(start / hop_s): int(end / hop_s)]) if rms else []
+    # clip-relative action signals (from the moment scorer), optional
+    sig = signals or {}
+    rel_onsets = [t - start for t in (sig.get("onset_times") or []) if start <= t < end]
+    ff = sig.get("firefight_peak_abs")
+    action = {"onsets": rel_onsets, "firefight_at": (ff - start) if ff is not None and start <= ff < end else None}
 
-    hook, hn = score_hook(rel_words, rel_rms, hop_s)
-    retention, lulls, rn = score_retention(rel_words, rel_rms, duration, hop_s)
+    hook, hn = score_hook(rel_words, rel_rms, hop_s, action=action)
+    retention, lulls, rn = score_retention(rel_words, rel_rms, duration, hop_s, action_onsets=rel_onsets)
     clarity, cn = score_clarity(rel_words, rel_rms, hop_s, source_w, source_h)
     length_fit, ln = score_length(duration, target_len)
     total = hook + retention + clarity + length_fit
@@ -275,8 +302,11 @@ def predict_all(candidates: Sequence[Dict[str, Any]], words: Sequence[Dict[str, 
     best_rank, best_total = None, -1
     for c in candidates:
         cc = dict(c)
+        csig = c.get("signals") or {}
         cc["predict"] = predict_candidate(words, rms, float(c["start"]), float(c["end"]),
-                                          hop_s, target_len, source_w, source_h)
+                                          hop_s, target_len, source_w, source_h,
+                                          signals={"onset_times": csig.get("onset_times") or [],
+                                                   "firefight_peak_abs": csig.get("firefight_peak_abs")})
         if not cc.get("strong_moment", True):
             cc["predict"]["biggest_fix"] = "no game action in this window — not worth clipping as a highlight"
         out.append(cc)

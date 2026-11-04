@@ -124,6 +124,21 @@ def test_predict_all_recommends_and_biggest_fix():
     print(f"[OK] predict_all: recommended={rec}; fix for #1: {out[0]['predict']['biggest_fix']!r}")
 
 
+def test_gameplay_open_is_a_hook_and_gunfire_is_not_dead_air():
+    """A fight that opens cold on gunfire with no commentary must still score a hook, and the
+    gaps between call-outs filled by gunfire must not count as dead air."""
+    words = words_from("get him get him", start=12.0) + words_from("nice", start=24.0)
+    rms = flat_rms(40, 0.15)
+    onsets = [0.3, 0.9, 1.4, 3.0, 5.2, 7.7, 9.1, 15.0, 18.4, 21.0, 27.5]  # clip-relative, inside 0-30
+    with_action = sc.predict_candidate(words, rms, 0.0, 30.0, target_len=30,
+                                       signals={"onset_times": onsets, "firefight_peak_abs": 5.0})
+    without = sc.predict_candidate(words, rms, 0.0, 30.0, target_len=30)
+    assert with_action["hook"] >= 20 > without["hook"], (with_action["hook"], without["hook"])
+    assert with_action["retention"] > without["retention"], (with_action["retention"], without["retention"])
+    assert not any(l["start"] < 10 for l in with_action["lulls"]), with_action["lulls"]
+    print(f"[OK] gameplay open: hook {without['hook']} -> {with_action['hook']}, retention {without['retention']} -> {with_action['retention']}")
+
+
 if __name__ == "__main__":
     test_hook_prefers_reaction_over_generic_intro()
     test_hook_penalises_silent_open()
@@ -132,3 +147,4 @@ if __name__ == "__main__":
     test_clarity_and_length()
     test_predict_all_recommends_and_biggest_fix()
     print("\nALL PREDICTOR TESTS PASSED SUCCESSFULLY!")
+    test_gameplay_open_is_a_hook_and_gunfire_is_not_dead_air()
