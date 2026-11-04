@@ -26,6 +26,7 @@ runner side (`src/clipper/config.py`, env-overridable). Defaults:
 | TARGET_LEN_SEC | `30` (15 / 60 allowed) |
 | REVIEW_CHANNEL | `telegram` (discord / email swappable) |
 | REVIEW_TIMEOUT_HOURS | `24` |
+| GAME | `""` — game name for the social copy; blank = "gameplay" (set per session if you want it in titles) |
 | BF6_CLIPPER_PATH | `C:\Users\ultim\Desktop\Projects\HistoryView.org\bf6_clipper.py` |
 | REPO_DIR | repo root (auto) |
 | PYTHON_EXE | the venv python running the runner |

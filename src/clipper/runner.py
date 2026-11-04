@@ -316,7 +316,7 @@ class Stages:
         try:
             return capcut_package.build_package(self.cfg, job_dir, output, rank, candidate,
                                                meta["original_stem"], words,
-                                               game=str(body.get("game") or "Battlefield 6"),
+                                               game=str(body.get("game") or self.cfg.GAME or "gameplay"),
                                                channel=str(body.get("channel") or "SmarterGamers"))
         except Exception as exc:
             raise StageError("package", f"package build failed: {exc}", None)

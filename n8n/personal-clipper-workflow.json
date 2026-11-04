@@ -139,6 +139,12 @@
               "type": "number"
             },
             {
+              "id": "1fb7b535-b2ed-4c29-928b-0c45ccc15fb5",
+              "name": "GAME",
+              "value": "",
+              "type": "string"
+            },
+            {
               "id": "2bc97220-8aef-4fc5-9e15-a9cce251e88d",
               "name": "BF6_CLIPPER_PATH",
               "value": "C:\\Users\\ultim\\Desktop\\Projects\\HistoryView.org\\bf6_clipper.py",
@@ -1153,7 +1159,7 @@
         "url": "={{ $('Config').first().json.RUNNER_URL }}/package",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { job_id: $('Parse Reply').first().json.job_id, rank: $('Parse Reply').first().json.rank, output: $json.output, candidate: $('Parse Reply').first().json.candidate } }}",
+        "jsonBody": "={{ { job_id: $('Parse Reply').first().json.job_id, rank: $('Parse Reply').first().json.rank, output: $json.output, candidate: $('Parse Reply').first().json.candidate, game: $('Config').first().json.GAME || '' } }}",
         "options": {
           "timeout": 600000,
           "response": {

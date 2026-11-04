@@ -197,10 +197,15 @@ def score_clarity(rel_words: Sequence[Dict[str, Any]], rel_rms: Sequence[float],
         avg_chars = _mean([len(w["word"]) for w in rel_words])
         notes["caption_chunks"] = n_chunks
         pts += 5 if avg_chars <= 7 else 3
-    # 9:16 subject visible: a 16:9 source fits the centre band of the vertical canvas
-    landscape = source_w > 0 and source_h > 0 and (source_w / source_h) >= 1.5
-    notes["subject_visible_916"] = bool(landscape)
-    pts += 5 if landscape else 2
+    # 9:16 subject visible: a 16:9 source fits the centre band of the vertical canvas; a source that is
+    # already vertical (OBS "nontsuru" 1080x1920 layout) needs no reframing, so it gets full marks too.
+    aspect = (source_w / source_h) if (source_w > 0 and source_h > 0) else 16 / 9
+    landscape = aspect >= 1.5
+    vertical = aspect <= 0.75
+    notes["subject_visible_916"] = bool(landscape or vertical)
+    if vertical:
+        notes["source_already_vertical"] = True
+    pts += 5 if (landscape or vertical) else 2
     return int(max(0, min(20, round(pts)))), notes
 
 

@@ -85,8 +85,11 @@ def test_clarity_and_length():
         for i in range(int(w["start"] / HOP), int(w["end"] / HOP) + 1):
             rms[i] = 0.4
     c_loud, n_loud = sc.score_clarity(words, rms, source_w=1920, source_h=1080)
-    c_buried, n_buried = sc.score_clarity(words, flat_rms(20, 0.3), source_w=1080, source_h=1920)
+    c_buried, n_buried = sc.score_clarity(words, flat_rms(20, 0.3), source_w=1440, source_h=1080)   # 4:3 = cropped
     assert c_loud > c_buried and n_loud["subject_visible_916"] is True and n_buried["subject_visible_916"] is False
+    # an already-vertical OBS source (1080x1920) needs no reframing -> same visibility credit as 16:9
+    c_vert, n_vert = sc.score_clarity(words, rms, source_w=1080, source_h=1920)
+    assert c_vert == c_loud and n_vert["subject_visible_916"] is True and n_vert.get("source_already_vertical") is True
     assert 0 <= c_loud <= 20
     assert sc.score_length(30)[0] == 10 and sc.score_length(70)[0] < sc.score_length(30)[0]
     assert "flag" in sc.score_length(70, target_len=30)[1] and "flag" not in sc.score_length(70, target_len=60)[1]

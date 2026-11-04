@@ -44,6 +44,7 @@ class ClipperConfig:
     TARGET_LEN_SEC: int = 30          # 15 / 30 / 60
     REVIEW_CHANNEL: str = "telegram"
     REVIEW_TIMEOUT_HOURS: int = 24
+    GAME: str = ""                     # name used in the social copy; blank = "gameplay" (streams rotate games)
     MIN_SOURCE_SEC: float = 20.0       # /guard: shorter sources are skipped as too_short
     WHISPER_MODEL: str = "small.en"
     WHISPER_DEVICE: str = "auto"       # auto (cuda then cpu, cached) | cuda | cpu

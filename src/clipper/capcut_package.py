@@ -198,7 +198,7 @@ def build_social(cfg: ClipperConfig, title: str, game: str, channel: str, durati
 
 # ------------------------------------------------------------------ main entry
 def build_package(cfg: ClipperConfig, job_dir: Path, output: Path, rank: int, candidate: Dict[str, Any],
-                  original_stem: str, words: Sequence[Dict[str, Any]], game: str = "Battlefield 6",
+                  original_stem: str, words: Sequence[Dict[str, Any]], game: str = "gameplay",
                   channel: str = "SmarterGamers") -> Dict[str, Any]:
     """Builds the package directory and returns ``{"package_dir", "files"}``."""
     start = float(candidate.get("start", 0.0))
