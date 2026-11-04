@@ -103,7 +103,7 @@ and confirm the credential is selected.
 ## 7. First run, by hand
 
 Option A — the Manual Trigger: set `Config.MANUAL_PATH` to a VOD that is already in
-`C:\SmarterGamers\Clips\Inbox`, click **Execute workflow**. The execution loops at *Wait 20s* →
+`C:\SmarterGamers\Clips\Inbox`, click **Execute workflow**. The execution loops at *Wait 70s* →
 *Telegram: getUpdates* until you answer in the chat.
 
 Option B — the webhook (works from the PC):
@@ -153,12 +153,15 @@ URL — Telegram's Bot API rejects `localhost` / `127.0.0.1` links with `Wrong H
 n8n is deliberately bound to `127.0.0.1:5678`. So the workflow does not use Send-and-Wait at all:
 
 - **Telegram: Send Review** is a plain `sendMessage`.
-- The execution then loops **Wait 20s → Telegram: getUpdates → Find Reply** until it sees a
+- The execution then loops **Wait 70s → Telegram: getUpdates → Find Reply** until it sees a
   message from `Config.TELEGRAM_CHAT_ID` that is newer than the review message, or until
   `Config.REVIEW_TIMEOUT_HOURS` has passed. `getUpdates` is an outbound HTTPS call from the
   container to `api.telegram.org`; nothing has to reach n8n.
 - You can reply from your phone anywhere; the reply is picked up on the next poll, so expect
-  up to ~20 s before the render starts. If you send several messages, the newest one counts.
+  up to ~70 s before the render starts. If you send several messages, the newest one counts.
+- While it waits, the execution shows as **Waiting** in the executions list with its node data saved
+  (n8n persists a Wait of 65 s or more; a shorter wait would sleep inside the process and look like
+  a stuck "Running" execution with no data). A persisted wait also survives an n8n restart.
 
 Two things this needs:
 
@@ -228,7 +231,8 @@ re-run a VOD.
 | Nothing after 24 h | the review timed out: the poll loop reached `REVIEW_TIMEOUT_HOURS`, sent "no reply in 24 h … nothing rendered", and ended. The working files stay in `Working\<job_id>\`. Re-run the VOD by removing its entry from `processed.json` and re-dropping it, or use the webhook. |
 | `(LLM unavailable: …)` in the review | Ollama is off or the model is missing: `ollama pull llama3.2:latest`. The run continues without the LLM opinion. |
 | Review message arrives but my reply is ignored | `Config.TELEGRAM_BOT_TOKEN` still says `REPLACE_WITH_BOT_TOKEN` (the poll gets 404 `Not Found`), the reply came from a different chat than `TELEGRAM_CHAT_ID`, or the bot has a webhook set (`getUpdates` → 409 — open `https://api.telegram.org/bot<TOKEN>/deleteWebhook` once). Open the execution and look at the *Telegram: getUpdates* output; *Find Reply* also puts the API error into `poll_error`. |
-| Reply takes a while to act | expected: the loop polls every 20 s. |
+| Reply takes a while to act | expected: the loop polls every 70 s. |
+| Execution sits at "Waiting" for hours | that is the review window: nobody has replied yet. Answer in the Telegram chat, or wait for `REVIEW_TIMEOUT_HOURS` to send the "nothing rendered" notice. |
 | Error workflow never fires | it only fires for active (production) executions, and only after you set it under *Settings → Error workflow*. |
 | Guard says `already_processed` | the file hash is in `processed.json`. Remove the entry to re-run. |
 

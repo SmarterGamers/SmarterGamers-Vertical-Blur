@@ -8,7 +8,7 @@
         "width": 700,
         "color": 4
       },
-      "id": "950ae8f7-7138-4925-8329-6c8bb34c5aef",
+      "id": "def26727-fa3a-48ec-a8a0-d051f1172608",
       "name": "Note 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
     },
     {
       "parameters": {},
-      "id": "266345fb-2468-4289-91da-1d49f2e30448",
+      "id": "538d31d0-9a34-49ff-8140-daf7c0a7bdf9",
       "name": "Error Trigger",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
@@ -33,7 +33,7 @@
         "assignments": {
           "assignments": [
             {
-              "id": "97f7f2ab-e382-4dae-aa65-e61d1fe0c3f5",
+              "id": "39057a0e-7b6d-4cbb-90dd-37e76a7cc03b",
               "name": "TELEGRAM_CHAT_ID",
               "value": "REPLACE_WITH_YOUR_CHAT_ID",
               "type": "string"
@@ -43,7 +43,7 @@
         "includeOtherFields": true,
         "options": {}
       },
-      "id": "5b553293-f262-401f-9541-8551187626df",
+      "id": "27e4ebcd-923f-45d8-8ce0-5e06a01d0101",
       "name": "Error Config",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -56,7 +56,7 @@
       "parameters": {
         "jsCode": "const j = $input.first().json;\nconst ex = j.execution || {};\nconst err = ex.error || {};\nconst wf = j.workflow || {};\nlet msg = err.message || String(err) || 'unknown error';\n// The runner returns {\"ok\":false,\"stage\":..,\"error\":..,\"fix\":..}; n8n often embeds that JSON in the message. Try to pull it out.\nlet stage = ex.lastNodeExecuted || '?';\nlet fix = null;\nlet jobHint = null;\nconst m = msg.match(/\\{[\\s\\S]*\"ok\"\\s*:\\s*false[\\s\\S]*\\}/);\nif (m) {\n  try {\n    const body = JSON.parse(m[0]);\n    if (body.stage) stage = `${ex.lastNodeExecuted || '?'} (${body.stage})`;\n    if (body.error) msg = body.error;\n    if (body.fix) fix = body.fix;\n  } catch (e) { /* keep raw message */ }\n}\nconst jm = msg.match(/[A-Za-z0-9_-]+_\\d{8}_\\d{6}/);\nif (jm) jobHint = jm[0];\nconst fm = msg.match(/[A-Za-z]:\\\\[^\"'\\n]+\\.(mp4|mkv|mov|webm)/i);\nconst fileHint = fm ? fm[0] : null;\n\nconst lines = [\n  `❌ Personal Clipper failed`,\n  `Workflow: ${wf.name || '?'}`,\n  `Stage / node: ${stage}`,\n];\nif (fileHint) lines.push(`Input: ${fileHint}`);\nif (jobHint) lines.push(`Job: ${jobHint}`);\nlines.push(`Error: ${msg}`);\nif (fix) lines.push(`Fix: ${fix}`);\nif (ex.url) lines.push(`Execution: ${ex.url}`);\nreturn [{ json: { text: lines.join('\\n'), chat_id: j.TELEGRAM_CHAT_ID } }];\n"
       },
-      "id": "d2542fb7-851e-40e9-93f0-25b0adef9690",
+      "id": "695bdebe-654a-47cd-8ac8-77a1c29dc16e",
       "name": "Format Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -75,7 +75,7 @@
           "appendAttribution": false
         }
       },
-      "id": "bc920e1f-9e5e-4caa-a8ba-0d4f68613dec",
+      "id": "8ce6dd8c-8730-4d5a-89c7-41d30addfc45",
       "name": "Telegram: Error",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,

@@ -8,7 +8,7 @@
         "width": 700,
         "color": 4
       },
-      "id": "b9054e88-3db2-48a9-9bdc-be0a6ba9344c",
+      "id": "46352d3d-0b5e-4644-abb3-892f1e583089",
       "name": "Note 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -31,7 +31,7 @@
           "followSymlinks": false
         }
       },
-      "id": "aa5d6eca-e976-4243-9d77-b4689784a591",
+      "id": "22fc396e-2fdf-41aa-869f-e0c5f00249b3",
       "name": "Local File Trigger",
       "type": "n8n-nodes-base.localFileTrigger",
       "typeVersion": 1,
@@ -42,7 +42,7 @@
     },
     {
       "parameters": {},
-      "id": "2d3e4175-5945-4a6e-8840-03489747e3c7",
+      "id": "f523d8f5-2758-42ac-9f95-ed633c846d5c",
       "name": "Manual Trigger",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -58,7 +58,7 @@
         "responseMode": "onReceived",
         "options": {}
       },
-      "id": "030542d1-1537-41e4-9d47-b519b359d290",
+      "id": "89db2035-f0fc-403b-ba7f-ab3644f4e43e",
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -73,133 +73,133 @@
         "assignments": {
           "assignments": [
             {
-              "id": "f81de763-46e1-4d5c-a99c-b4200edda97f",
+              "id": "84415b73-639d-461f-86e6-c990d6307cb6",
               "name": "INBOX",
               "value": "C:\\SmarterGamers\\Clips\\Inbox",
               "type": "string"
             },
             {
-              "id": "1f3d735f-6e87-48af-a099-44723fc81943",
+              "id": "4f15f689-1bfd-4965-811b-1b233d55ec9c",
               "name": "WORKING",
               "value": "C:\\SmarterGamers\\Clips\\Working",
               "type": "string"
             },
             {
-              "id": "ccb329d5-07c4-4a58-809b-933408f4e336",
+              "id": "6aaa342b-72e6-428e-8736-90075ab27500",
               "name": "READY",
               "value": "C:\\SmarterGamers\\Clips\\Ready",
               "type": "string"
             },
             {
-              "id": "6865b4c5-52e5-452f-bb91-ff454f4514bd",
+              "id": "cb154b92-921c-4aa6-a116-eb97e331d32e",
               "name": "LEDGER",
               "value": "C:\\SmarterGamers\\Clips\\processed.json",
               "type": "string"
             },
             {
-              "id": "f3dc29a5-2642-4caa-9223-4d14d0d03aea",
+              "id": "2831d851-0f09-49f4-93df-e5876ffef1ec",
               "name": "RUN_LOG",
               "value": "C:\\SmarterGamers\\Clips\\runs.jsonl",
               "type": "string"
             },
             {
-              "id": "6a0c31c1-b34f-4f72-9390-51dbac2ac07e",
+              "id": "86517203-4ee6-4c40-be58-a1141a7ad7fd",
               "name": "RUNNER_URL",
               "value": "http://host.docker.internal:5690",
               "type": "string"
             },
             {
-              "id": "db1b3b77-df71-4245-a512-a482132d1e6b",
+              "id": "f356ab54-f108-4438-9c97-36f5fee7d53b",
               "name": "OLLAMA_URL",
               "value": "http://host.docker.internal:11434",
               "type": "string"
             },
             {
-              "id": "d0e7f665-636b-4e73-a279-b7a6d1aecf49",
+              "id": "ee9fbac0-4a5e-4714-819e-0cdf07863dd0",
               "name": "OLLAMA_MODEL",
               "value": "llama3.2:latest",
               "type": "string"
             },
             {
-              "id": "6cb621f0-d1c4-43e4-92f5-19c47d0e04a9",
+              "id": "c389e024-76f6-4f31-bf23-983b1cf94415",
               "name": "TARGET_LEN_SEC",
               "value": 30,
               "type": "number"
             },
             {
-              "id": "0f31e41f-624f-47ae-99aa-3f0720cc16a7",
+              "id": "0c522574-8b89-4a16-ac96-9370a86c79fd",
               "name": "REVIEW_CHANNEL",
               "value": "telegram",
               "type": "string"
             },
             {
-              "id": "f6d698c7-ab70-4513-84e8-a7f8428b877b",
+              "id": "78d8e7b0-c96a-427d-b492-4ff54001bd59",
               "name": "REVIEW_TIMEOUT_HOURS",
               "value": 24,
               "type": "number"
             },
             {
-              "id": "402fc459-6f39-4aec-82d6-861a4ceb5de7",
+              "id": "2bc97220-8aef-4fc5-9e15-a9cce251e88d",
               "name": "BF6_CLIPPER_PATH",
               "value": "C:\\Users\\ultim\\Desktop\\Projects\\HistoryView.org\\bf6_clipper.py",
               "type": "string"
             },
             {
-              "id": "cbbb1382-5e0a-45d6-afb7-0bc9d4187534",
+              "id": "145e6535-90a5-40ac-b5fa-bc2ed5de230f",
               "name": "REPO_DIR",
               "value": "",
               "type": "string"
             },
             {
-              "id": "18f44b23-f3f9-4f35-8c5f-26c30fb1b321",
+              "id": "8067a5f3-66e7-4c40-92b3-3ef657fafea4",
               "name": "PYTHON_EXE",
               "value": "",
               "type": "string"
             },
             {
-              "id": "6a48db1c-0531-4090-a106-d184b5736a0b",
+              "id": "4ebb0536-ffac-45e8-af7b-94b5ec3df290",
               "name": "CONTAINER_INBOX",
               "value": "/data/clips/Inbox",
               "type": "string"
             },
             {
-              "id": "87e44c36-7248-4381-b524-5d732ba11b40",
+              "id": "645451f6-61e6-4ddb-87a5-c1a763d51e83",
               "name": "TELEGRAM_CHAT_ID",
               "value": "REPLACE_WITH_YOUR_CHAT_ID",
               "type": "string"
             },
             {
-              "id": "684df65f-0fd1-470f-91da-f398acde80ce",
+              "id": "d8cfa329-3102-474d-97c1-025dea0cfb33",
               "name": "TELEGRAM_BOT_TOKEN",
               "value": "REPLACE_WITH_BOT_TOKEN",
               "type": "string"
             },
             {
-              "id": "a293c8b6-0415-490e-8f7f-8aab123f1ed8",
+              "id": "433e136b-2bc7-422a-94ef-19599e0ec62d",
               "name": "MANUAL_PATH",
               "value": "C:\\SmarterGamers\\Clips\\Inbox\\test.mp4",
               "type": "string"
             },
             {
-              "id": "92670644-53f1-4e01-835f-f0ef7649fd09",
+              "id": "78b84727-314c-4987-961a-d8eff98c037a",
               "name": "CAPTIONS",
               "value": true,
               "type": "boolean"
             },
             {
-              "id": "09f0a913-1d5c-44d6-938a-4e4dcd7c7549",
+              "id": "f269b670-ddb0-4b35-ad59-b5442d1de2a3",
               "name": "RENDER_OFFSET",
               "value": -120,
               "type": "number"
             },
             {
-              "id": "36a2b36b-d5db-4ef3-9dd8-33b55bcab9d8",
+              "id": "8a5e58bb-4662-4b68-8c5f-113d7c912820",
               "name": "AUDIO_MODE",
               "value": "mix_all",
               "type": "string"
             },
             {
-              "id": "9af186ae-7354-4858-abe7-61f3b6fca594",
+              "id": "a0e438d0-5bc5-4194-a6d4-cbaae9797f41",
               "name": "VOLUME",
               "value": 3.0,
               "type": "number"
@@ -209,7 +209,7 @@
         "includeOtherFields": true,
         "options": {}
       },
-      "id": "42681126-74a2-4e9b-906f-7975d98cea26",
+      "id": "f3156d18-4cb5-44a6-80ff-4256122272c5",
       "name": "Config",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -222,7 +222,7 @@
       "parameters": {
         "jsCode": "// Map whatever trigger fired into { path: <Windows path for the runner>, original: <basename>, trigger: <which> }\nconst cfg = $('Config').first().json;\nconst j = $input.first().json;\n\nlet raw = null;\nlet trigger = 'manual';\nif (j.path && typeof j.path === 'string' && !j.body) {\n  raw = j.path; trigger = 'file';                 // Local File Trigger → { event, path }\n} else if (j.body && j.body.path) {\n  raw = j.body.path; trigger = 'webhook';         // Webhook → { body: { path } }\n} else {\n  raw = cfg.MANUAL_PATH; trigger = 'manual';      // Manual Trigger → Config.MANUAL_PATH\n}\nif (!raw) throw new Error('No input path. Set Config.MANUAL_PATH or POST {\"path\": ...} to the webhook.');\n\n// Container path → Windows path (only when the path starts with CONTAINER_INBOX).\nlet winPath = raw;\nconst cInbox = (cfg.CONTAINER_INBOX || '').replace(/\\/+$/, '');\nif (cInbox && raw.startsWith(cInbox + '/')) {\n  const rel = raw.slice(cInbox.length + 1).replace(/\\//g, '\\\\');\n  winPath = cfg.INBOX.replace(/\\\\+$/, '') + '\\\\' + rel;\n}\nconst original = winPath.split(/[\\\\/]/).pop();\nreturn [{ json: { path: winPath, raw_path: raw, original, trigger } }];\n"
       },
-      "id": "5f19cc54-2af4-4e8e-ab78-d6fda286eba0",
+      "id": "15e2c474-a3b4-43eb-9ca8-5d2d80775da9",
       "name": "Normalize Input",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -238,7 +238,7 @@
         "width": 420,
         "color": 5
       },
-      "id": "1efed2ad-a8a7-4bb7-8cd3-5d0ae3e574cc",
+      "id": "f7461c9c-a5fe-47ca-85fa-bb8645ae7ec0",
       "name": "Note 6",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -263,7 +263,7 @@
           }
         }
       },
-      "id": "328efde0-4006-4855-803f-266f8edf9414",
+      "id": "d90a7a8f-7c44-4c59-93e6-2f7519e085e3",
       "name": "Guard",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -284,7 +284,7 @@
           },
           "conditions": [
             {
-              "id": "be2afcba-ff4e-4bd8-9f61-2dec30171223",
+              "id": "3b8a5c62-c813-42c7-8275-7b42c96c17fa",
               "leftValue": "={{ $json.skip }}",
               "rightValue": "",
               "operator": {
@@ -298,7 +298,7 @@
         },
         "options": {}
       },
-      "id": "b9783699-cd67-4b4e-90e8-a6aff6b43776",
+      "id": "416d4a25-0bd9-4114-937b-2b9a9bbd74bf",
       "name": "Skip?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -309,7 +309,7 @@
     },
     {
       "parameters": {},
-      "id": "e768d468-0d49-40da-85ae-6ccf47bff30f",
+      "id": "11a39af7-26f4-4912-92c1-54fd8b162994",
       "name": "Skipped",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
@@ -325,7 +325,7 @@
         "width": 1500,
         "color": 4
       },
-      "id": "9914a605-2b92-4c6c-9e37-be7dc1784c7e",
+      "id": "b4a8d6d9-b1d6-4b89-807e-681f7fd1cb37",
       "name": "Note 10",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -350,7 +350,7 @@
           }
         }
       },
-      "id": "cd3ac8d5-cfe3-470f-8139-43d9ff2bd1b0",
+      "id": "5ccbcaa2-d0b0-471b-ae44-92c413f1dc9d",
       "name": "Ingest",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -376,7 +376,7 @@
           }
         }
       },
-      "id": "7b5cd127-13cf-4a20-b4c7-63a7ef540a71",
+      "id": "6818abc2-e715-4abb-9d9d-2e51a8382485",
       "name": "Transcribe",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -402,7 +402,7 @@
           }
         }
       },
-      "id": "43fe8752-559c-4eff-acfb-5c1dc2f94117",
+      "id": "f7cbea66-59e6-4ab5-86ed-12aaa659b839",
       "name": "Score",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -428,7 +428,7 @@
           }
         }
       },
-      "id": "2cb5bdb3-e281-4bcf-90ad-6b1aef4d87f2",
+      "id": "f5344ee3-e22f-434c-9c2c-e68e240e0221",
       "name": "Predict",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -454,7 +454,7 @@
           }
         }
       },
-      "id": "7bfe5892-c582-4f7f-9d68-d1c67a618231",
+      "id": "5b7a179e-7abf-4a4d-b190-9bc3f7a40c5e",
       "name": "Ollama Verdict",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -468,7 +468,7 @@
       "parameters": {
         "jsCode": "// Ollama Verdict failed (runner down mid-run, Ollama off, timeout...). Keep going without the LLM.\nconst predict = $('Predict').first().json;\nconst err = $input.first().json;\nconst reason = (err && (err.error && (err.error.message || err.error))) || err.message || 'request failed';\nconst candidates = (predict.candidates || []).map(c => ({ ...c, llm: null, llm_error: String(reason) }));\nreturn [{ json: { ok: true, candidates, recommended: predict.recommended, llm_error: String(reason) } }];\n"
       },
-      "id": "51c40bac-5972-4861-a00c-c4ae9bf1f86a",
+      "id": "d7367298-a22a-45a4-92e3-2dd0fcb49199",
       "name": "LLM Unavailable",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -479,12 +479,12 @@
     },
     {
       "parameters": {
-        "content": "## Review — build message, pick channel, send, poll for a plain reply\n`Build Review Message` renders the exact CONTRACT.md text. `Review Channel` switches on `Config.REVIEW_CHANNEL`.\nOnly **telegram** is wired. Discord / Email placeholders are disabled — see the note below them.\n\n**Why polling, not Send-and-Wait:** n8n's Telegram *Send and Wait* posts a *Respond* button whose URL must be public — Telegram rejects `http://localhost…` / `127.0.0.1` with `Wrong HTTP URL`, and this n8n stays bound to 127.0.0.1:5678 on purpose. So **Telegram: Send Review** is a plain `sendMessage`, and the loop **Wait 20s → Telegram: getUpdates → Find Reply → Reply Found? / Timed Out? → Set Offset** reads your ordinary chat reply through the Bot API's `getUpdates` (long-poll with `timeout=0`, `offset` = last update_id + 1). No inbound URL, no port change, reply from the phone anywhere. Latency ≈ 20 s. The loop stops at `Config.REVIEW_TIMEOUT_HOURS`.\n**Requirement:** the bot must have NO webhook set (a Telegram Trigger node would set one and `getUpdates` then returns HTTP 409). `getUpdates` needs the token in the URL path, which no n8n credential can inject into an HTTP Request node — hence `Config.TELEGRAM_BOT_TOKEN`.",
+        "content": "## Review — build message, pick channel, send, poll for a plain reply\n`Build Review Message` renders the exact CONTRACT.md text. `Review Channel` switches on `Config.REVIEW_CHANNEL`.\nOnly **telegram** is wired. Discord / Email placeholders are disabled — see the note below them.\n\n**Why polling, not Send-and-Wait:** n8n's Telegram *Send and Wait* posts a *Respond* button whose URL must be public — Telegram rejects `http://localhost…` / `127.0.0.1` with `Wrong HTTP URL`, and this n8n stays bound to 127.0.0.1:5678 on purpose. So **Telegram: Send Review** is a plain `sendMessage`, and the loop **Wait 70s → Telegram: getUpdates → Find Reply → Reply Found? / Timed Out? → Set Offset** reads your ordinary chat reply through the Bot API's `getUpdates` (long-poll with `timeout=0`, `offset` = last update_id + 1). No inbound URL, no port change, reply from the phone anywhere. Latency ≈ 70 s. The loop stops at `Config.REVIEW_TIMEOUT_HOURS`.\n**Why 70 s and not 20 s:** n8n only persists a Wait of ≥ 65 s (`MAX_IN_PROCESS_WAIT_MS`); a shorter one sleeps inside the process, so the execution shows *running* with no node data and `waitTill = NULL` for the whole review window, and an n8n restart loses it. At 70 s the execution is saved as *waiting* on every iteration, is visible in the UI, and survives restarts.\n**Requirement:** the bot must have NO webhook set (a Telegram Trigger node would set one and `getUpdates` then returns HTTP 409). `getUpdates` needs the token in the URL path, which no n8n credential can inject into an HTTP Request node — hence `Config.TELEGRAM_BOT_TOKEN`.",
         "height": 290,
         "width": 1500,
         "color": 4
       },
-      "id": "df9d9610-a7bd-4b41-b57d-adf276d8f7dd",
+      "id": "360cc06c-205a-42c6-a5c1-97f70536ef2a",
       "name": "Note 17",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -497,7 +497,7 @@
       "parameters": {
         "jsCode": "// Produce the review text exactly as CONTRACT.md specifies.\nconst cfg = $('Config').first().json;\nconst ingest = $('Ingest').first().json;\nconst norm = $('Normalize Input').first().json;\nconst transcribe = $('Transcribe').first().json;\nconst inp = $input.first().json;\nconst candidates = inp.candidates || [];\nconst recommended = inp.recommended ?? $('Predict').first().json.recommended ?? null;\n\nfunction hms(sec) {\n  sec = Math.max(0, Math.round(Number(sec) || 0));\n  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;\n  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;\n}\nfunction r0(x) { return Math.round(Number(x) || 0); }\n\nconst lines = [];\nlines.push(`🎬 Personal Clipper — ${norm.original || ingest.source} (${hms(ingest.duration_sec)})`);\nif (transcribe && transcribe.words === 0) lines.push(`(transcription: ${transcribe.note || 'no speech detected'} — scores rely on audio only)`);\nfor (const c of candidates) {\n  const p = c.predict || {};\n  const star = (recommended !== null && c.rank === recommended) ? ' ⭐ recommended' : '';\n  lines.push(`#${c.rank}  score ${r0(p.total)}/100  (hook ${r0(p.hook)} · retention ${r0(p.retention)} · clarity ${r0(p.clarity)} · length ${r0(p.length_fit)})   ${hms(c.start)} → ${hms(c.end)}${star}`);\n  lines.push(`    why: ${c.reason || '-'}`);\n  lines.push(`    fix: ${p.biggest_fix || '-'}`);\n  if (c.llm === null || c.llm === undefined) {\n    lines.push(`    llm: (LLM unavailable: ${c.llm_error || inp.llm_error || 'unknown'})`);\n  } else {\n    const flag = c.llm.agrees === false ? '⚠️ disagrees' : '✅ agrees';\n    const fixTxt = c.llm.fix ? ` — fix: ${c.llm.fix}` : '';\n    lines.push(`    llm: \"${c.llm.verdict || ''}\"${fixTxt} ${flag}`);\n  }\n}\nconst hours = cfg.REVIEW_TIMEOUT_HOURS || 24;\nlines.push(`Reply: a number (e.g. 2), \"2 start 5s earlier\", \"2 end 3s later\", or \"reject all\". No reply in ${hours} h = nothing rendered.`);\nlines.push(`Reply in this chat with a number (e.g. 2), '2 start 5s earlier', or 'reject all'. No reply within ${hours} h = nothing rendered.`);\n\nreturn [{ json: {\n  text: lines.join('\\n'),\n  job_id: ingest.job_id,\n  job_dir: ingest.job_dir,\n  input: norm.path,\n  original: norm.original,\n  duration_sec: ingest.duration_sec,\n  candidates,\n  recommended,\n} }];\n"
       },
-      "id": "d454118f-ce37-4a47-8c5b-2f18e9b4b77d",
+      "id": "f81c7ba5-c6e3-4a07-98f7-4c6167dbd15c",
       "name": "Build Review Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -520,7 +520,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "332335d2-3a9c-4f06-a889-1cf9d44bc682",
+                    "id": "5d4cd9cb-324c-4e6b-a17f-505e2e374654",
                     "leftValue": "={{ $('Config').item.json.REVIEW_CHANNEL }}",
                     "rightValue": "telegram",
                     "operator": {
@@ -544,7 +544,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "72f7c4d7-eb2f-4ae7-ae3e-f967247f34da",
+                    "id": "c264b383-b1fe-4e11-b950-32e3adf3a252",
                     "leftValue": "={{ $('Config').item.json.REVIEW_CHANNEL }}",
                     "rightValue": "discord",
                     "operator": {
@@ -568,7 +568,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "e4983bc0-b7cc-4adb-a659-df8934ad57e3",
+                    "id": "f3e9924f-8174-4715-af43-395020e5a99c",
                     "leftValue": "={{ $('Config').item.json.REVIEW_CHANNEL }}",
                     "rightValue": "email",
                     "operator": {
@@ -588,7 +588,7 @@
           "fallbackOutput": "none"
         }
       },
-      "id": "18e52aea-3a66-496a-895f-aa9239bc6cc3",
+      "id": "0b67e403-e121-4f4e-91de-5c201b0b3b43",
       "name": "Review Channel",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
@@ -607,7 +607,7 @@
           "appendAttribution": false
         }
       },
-      "id": "e3081058-8cbb-4f6e-b8ce-58e53c0fe66c",
+      "id": "d99e76bc-c01f-444a-bf5d-552f07e93eee",
       "name": "Telegram: Send Review",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -628,7 +628,7 @@
         "message": "={{ $json.text }}",
         "responseType": "approval"
       },
-      "id": "a96fd241-48d1-454e-9dfe-607e27ae8ea1",
+      "id": "ec7e6934-a9bf-429a-b2f4-87614ed92f1d",
       "name": "Discord Review (placeholder)",
       "type": "n8n-nodes-base.discord",
       "typeVersion": 2,
@@ -652,7 +652,7 @@
         "message": "={{ $json.text }}",
         "responseType": "freeText"
       },
-      "id": "b6805581-3a28-4115-832d-53c05f7ac44d",
+      "id": "c19e6cb4-c9e7-4704-b758-6ab6c2deb1ab",
       "name": "Email Review (placeholder)",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
@@ -674,7 +674,7 @@
         "width": 560,
         "color": 6
       },
-      "id": "5a8cbb4b-9b37-4da1-ad12-b73e7f1d59a0",
+      "id": "6ada2979-8a3a-4dd9-b9fa-b8a8a37f8584",
       "name": "Note 23",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -687,7 +687,7 @@
       "parameters": {
         "jsCode": "// Start the getUpdates poll loop. Carries the review payload along; `text` of the review becomes `review_text`\n// so that `text` is free for the user's reply (Find Reply writes it there).\nconst cfg = $('Config').first().json;\nconst review = $('Build Review Message').first().json;\nconst sent = $input.first().json;              // Telegram sendMessage result (message object)\nconst sent_at = Math.floor(Date.now() / 1000);\nconst hours = Number(cfg.REVIEW_TIMEOUT_HOURS) || 24;\nconst { text, ...rest } = review;\nreturn [{ json: {\n  ...rest,\n  review_text: text,\n  review_message_id: sent && sent.message_id ? sent.message_id : null,\n  sent_at,\n  deadline: sent_at + hours * 3600,\n  poll_offset: 0,\n  attempts: 0,\n} }];\n"
       },
-      "id": "b8c0622d-e792-4475-9166-6bec9aaad0d7",
+      "id": "02202272-75ff-4aab-918f-d8ef459d02e6",
       "name": "Init Poll",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -699,11 +699,11 @@
     {
       "parameters": {
         "resume": "timeInterval",
-        "amount": 20,
+        "amount": 70,
         "unit": "seconds"
       },
-      "id": "043c5161-5edc-4f28-b023-6485b4d11625",
-      "name": "Wait 20s",
+      "id": "f8d2018b-94fc-4222-ac25-2afe3a24bab9",
+      "name": "Wait 70s",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
@@ -739,7 +739,7 @@
           }
         }
       },
-      "id": "0a632f1e-9377-495c-841a-4ae2b19fd315",
+      "id": "32f10927-2efa-490c-9314-8937f57f8686",
       "name": "Telegram: getUpdates",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -751,9 +751,9 @@
     },
     {
       "parameters": {
-        "jsCode": "// Look for the user's reply among the getUpdates results. Loop state comes from the last run of `Wait 20s`\n// (so it is still intact if getUpdates failed and `continue on fail` produced an {error} item).\nconst cfg = $('Config').first().json;\nconst state = $('Wait 20s').first().json;\nconst resp = $input.first().json || {};\nconst chatId = String(cfg.TELEGRAM_CHAT_ID);\nconst now = Math.floor(Date.now() / 1000);\n\nconst updates = (resp.ok === true && Array.isArray(resp.result)) ? resp.result : [];\nlet maxId = null;\nlet best = null;\nfor (const u of updates) {\n  if (typeof u.update_id === 'number') maxId = maxId === null ? u.update_id : Math.max(maxId, u.update_id);\n  const m = u.message;\n  if (!m || !m.chat || String(m.chat.id) !== chatId) continue;\n  if (!(Number(m.date) > Number(state.sent_at))) continue;\n  if (typeof m.text !== 'string' || !m.text.trim()) continue;\n  if (!best || Number(m.date) >= Number(best.date)) best = m;   // newest wins\n}\nconst next_offset = maxId === null ? Number(state.poll_offset) || 0 : maxId + 1;\nconst attempts = (Number(state.attempts) || 0) + 1;\nconst poll_error = resp.error ? String(resp.error.message || resp.error) : (resp.ok === false ? String(resp.description || 'getUpdates not ok') : null);\n\nconst { found: _f, text: _t, ...carry } = state;\nif (best) {\n  return [{ json: { ...carry, found: true, text: best.text.trim(), reply_date: best.date, next_offset, attempts, timed_out: false, poll_error: null } }];\n}\nreturn [{ json: { ...carry, found: false, next_offset, attempts, timed_out: now >= Number(state.deadline), poll_error } }];\n"
+        "jsCode": "// Look for the user's reply among the getUpdates results. Loop state comes from the last run of `Wait 70s`\n// (so it is still intact if getUpdates failed and `continue on fail` produced an {error} item).\nconst cfg = $('Config').first().json;\nconst state = $('Wait 70s').first().json;\nconst resp = $input.first().json || {};\nconst chatId = String(cfg.TELEGRAM_CHAT_ID);\nconst now = Math.floor(Date.now() / 1000);\n\nconst updates = (resp.ok === true && Array.isArray(resp.result)) ? resp.result : [];\nlet maxId = null;\nlet best = null;\nfor (const u of updates) {\n  if (typeof u.update_id === 'number') maxId = maxId === null ? u.update_id : Math.max(maxId, u.update_id);\n  const m = u.message;\n  if (!m || !m.chat || String(m.chat.id) !== chatId) continue;\n  if (!(Number(m.date) > Number(state.sent_at))) continue;\n  if (typeof m.text !== 'string' || !m.text.trim()) continue;\n  if (!best || Number(m.date) >= Number(best.date)) best = m;   // newest wins\n}\nconst next_offset = maxId === null ? Number(state.poll_offset) || 0 : maxId + 1;\nconst attempts = (Number(state.attempts) || 0) + 1;\nconst poll_error = resp.error ? String(resp.error.message || resp.error) : (resp.ok === false ? String(resp.description || 'getUpdates not ok') : null);\n\nconst { found: _f, text: _t, ...carry } = state;\nif (best) {\n  return [{ json: { ...carry, found: true, text: best.text.trim(), reply_date: best.date, next_offset, attempts, timed_out: false, poll_error: null } }];\n}\nreturn [{ json: { ...carry, found: false, next_offset, attempts, timed_out: now >= Number(state.deadline), poll_error } }];\n"
       },
-      "id": "72e2972a-84a0-4e01-87e9-c3bf324573ba",
+      "id": "3d2d31f2-aebb-4916-9d51-6efbbcc11bad",
       "name": "Find Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -773,7 +773,7 @@
           },
           "conditions": [
             {
-              "id": "17887924-ed13-4960-969a-ef4c2f77e63e",
+              "id": "6315ca71-0f10-468b-8c52-c812c4c26d08",
               "leftValue": "={{ $json.found }}",
               "rightValue": "",
               "operator": {
@@ -787,7 +787,7 @@
         },
         "options": {}
       },
-      "id": "c6b9fdec-7679-42ca-a318-96aab25dc4ec",
+      "id": "2fd5ab2b-2336-48c2-9948-43aed4d6c00b",
       "name": "Reply Found?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -807,7 +807,7 @@
           },
           "conditions": [
             {
-              "id": "26c06b02-daf8-44fd-85fa-d9438ac56a80",
+              "id": "5a520623-ef70-42a6-8d5c-bc128a48d039",
               "leftValue": "={{ $json.timed_out }}",
               "rightValue": "",
               "operator": {
@@ -821,7 +821,7 @@
         },
         "options": {}
       },
-      "id": "854ea9f2-d19b-417e-aa53-0d7da4ff607d",
+      "id": "c990e499-04e1-408b-9cc4-fc3157799093",
       "name": "Timed Out?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -835,13 +835,13 @@
         "assignments": {
           "assignments": [
             {
-              "id": "b4fb2b31-0ea0-464b-9810-fc6bdb145f9f",
+              "id": "f215ea02-b67e-450f-8073-f82d5ba8c340",
               "name": "poll_offset",
               "value": "={{ $json.next_offset }}",
               "type": "number"
             },
             {
-              "id": "49059ed6-957c-466d-a4fa-7a8ac8415cde",
+              "id": "b483e908-d0b4-4156-8a4f-20af67f2f785",
               "name": "attempts",
               "value": "={{ $json.attempts }}",
               "type": "number"
@@ -851,7 +851,7 @@
         "includeOtherFields": true,
         "options": {}
       },
-      "id": "6f77cd9a-0e03-41f8-a416-42ee5bf46442",
+      "id": "ca994b00-c78f-4b7c-81b2-51df413307fb",
       "name": "Set Offset",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -862,12 +862,12 @@
     },
     {
       "parameters": {
-        "content": "### Poll loop\n`Wait 20s` → `Telegram: getUpdates` (`?timeout=0&offset=<poll_offset>`, 15 s HTTP timeout, *continue on fail*) → `Find Reply` keeps updates where `message.chat.id == Config.TELEGRAM_CHAT_ID`, `message.date > sent_at` and `text` non-empty, newest wins.\n- found → **Reply Found?** true → `Parse Reply` (`$json.text` = your reply; `candidates`, `job_id`… carried along).\n- not found and `now ≥ deadline` → **Timed Out?** true → *Telegram: Timed Out*.\n- otherwise → `Set Offset` writes `poll_offset = max(update_id)+1` and loops back to `Wait 20s`.\nA transient Telegram/API error yields an `{error}` item; `Find Reply` treats it as 'nothing yet' and the loop continues. 24 h at 20 s ≈ 4 300 iterations; each adds a few KB to the execution log.",
+        "content": "### Poll loop\n`Wait 70s` → `Telegram: getUpdates` (`?timeout=0&offset=<poll_offset>`, 15 s HTTP timeout, *continue on fail*) → `Find Reply` keeps updates where `message.chat.id == Config.TELEGRAM_CHAT_ID`, `message.date > sent_at` and `text` non-empty, newest wins.\n- found → **Reply Found?** true → `Parse Reply` (`$json.text` = your reply; `candidates`, `job_id`… carried along).\n- not found and `now ≥ deadline` → **Timed Out?** true → *Telegram: Timed Out*.\n- otherwise → `Set Offset` writes `poll_offset = max(update_id)+1` and loops back to `Wait 70s`.\nA transient Telegram/API error yields an `{error}` item; `Find Reply` treats it as 'nothing yet' and the loop continues. 24 h at 70 s ≈ 1 200 iterations; each adds a few KB to the execution's run data.",
         "height": 300,
         "width": 620,
         "color": 5
       },
-      "id": "7b61e04a-2801-4c5c-a1ce-a5d34cba939b",
+      "id": "063739fb-7b1f-4943-812f-4a4606365bc8",
       "name": "Note 31",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -886,7 +886,7 @@
           "appendAttribution": false
         }
       },
-      "id": "6aade33e-dda1-483f-a770-d9d2a9d90af5",
+      "id": "a8a90341-5bc9-4ee5-82f2-ee65371244fa",
       "name": "Telegram: Timed Out",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -902,7 +902,7 @@
     },
     {
       "parameters": {},
-      "id": "98f4876f-a410-4f26-9280-f2c93e9350c9",
+      "id": "97f4f825-6d41-4af9-ace1-0f494a8ecbd9",
       "name": "Timed out — nothing rendered",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
@@ -918,7 +918,7 @@
         "width": 900,
         "color": 4
       },
-      "id": "40b95871-28b8-474d-b405-f085d41280ea",
+      "id": "7a7dc987-2618-4af3-8452-92c01614dbce",
       "name": "Note 34",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -931,7 +931,7 @@
       "parameters": {
         "jsCode": "// Implements the CONTRACT.md reply grammar.\nconst review = $('Build Review Message').first().json;\nconst cfg = $('Config').first().json;\nconst raw = String($input.first().json.text || '').trim();   // set by Find Reply\nconst text = raw.toLowerCase().replace(/\\s+/g, ' ');\nconst duration = Number(review.duration_sec) || 0;\n\nconst GRAMMAR = /^(\\d)(?:\\s*(?:start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?)*$|^reject all$/i;\n\nconst base = { reply: raw, job_id: review.job_id, job_dir: review.job_dir, input: review.input,\n               original: review.original, candidates: review.candidates };\n\nif (text === 'reject all') return [{ json: { ...base, action: 'reject' } }];\nif (!GRAMMAR.test(text)) return [{ json: { ...base, action: 'invalid', error: `Could not parse reply \"${raw}\"` } }];\n\nconst rank = Number(text.match(/^(\\d)/)[1]);\nconst cand = (review.candidates || []).find(c => Number(c.rank) === rank);\nif (!cand) return [{ json: { ...base, action: 'invalid', error: `No candidate #${rank}` } }];\n\nlet start = Number(cand.start), end = Number(cand.end);\nconst clauseRe = /(start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?/g;\nlet m;\nwhile ((m = clauseRe.exec(text)) !== null) {\n  const which = m[1];\n  let delta = parseFloat(m[2]);\n  const dir = m[3];\n  if (dir === 'earlier') delta = -Math.abs(delta);\n  else if (dir === 'later') delta = Math.abs(delta);\n  // no direction word: signed number is taken literally (+ = later, - = earlier)\n  if (which === 'start') start += delta; else end += delta;\n}\nconst clamp = v => Math.min(Math.max(0, v), duration || v);\nstart = clamp(start); end = clamp(end);\nif (end <= start) return [{ json: { ...base, action: 'invalid', error: `Window collapsed (start ${start}s ≥ end ${end}s)` } }];\n\nreturn [{ json: { ...base, action: 'render', rank, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)),\n                  duration: Number((end - start).toFixed(3)), candidate: { ...cand, start, end },\n                  captions: cfg.CAPTIONS !== false, offset: cfg.RENDER_OFFSET, audio_mode: cfg.AUDIO_MODE, volume: cfg.VOLUME } }];\n"
       },
-      "id": "8546197d-daef-4ec0-9eb4-a4dc05fbbfbe",
+      "id": "c703caca-6695-460f-953e-7a46dcc41c30",
       "name": "Parse Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -954,7 +954,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "2e7820a3-bab9-4cbb-a9a4-345929076d61",
+                    "id": "0ec1c1a8-2620-4d91-9935-8d53820d4da5",
                     "leftValue": "={{ $json.action }}",
                     "rightValue": "render",
                     "operator": {
@@ -978,7 +978,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "6c3370e0-aeb0-4528-ba41-b332d1e73392",
+                    "id": "38987b8c-6ecc-4fae-bede-d654dcf120e5",
                     "leftValue": "={{ $json.action }}",
                     "rightValue": "reject",
                     "operator": {
@@ -1002,7 +1002,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "50bfad30-80b6-482a-9a67-967ea7155a61",
+                    "id": "29935d0b-02ec-4187-a291-1eb7f905de2e",
                     "leftValue": "={{ $json.action }}",
                     "rightValue": "invalid",
                     "operator": {
@@ -1022,7 +1022,7 @@
           "fallbackOutput": "none"
         }
       },
-      "id": "8c7e97c7-926f-44b0-a634-3ecff1d28c87",
+      "id": "09054c5c-1e8b-4ca7-a3b1-a9372fa952c2",
       "name": "Reply Action",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
@@ -1041,7 +1041,7 @@
           "appendAttribution": false
         }
       },
-      "id": "53bf9b72-8f8d-48dd-bbb8-9af75c411956",
+      "id": "c7731105-ec80-4c05-a580-d938a68b2b24",
       "name": "Telegram: Rejected",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -1057,7 +1057,7 @@
     },
     {
       "parameters": {},
-      "id": "098d0f8f-8b31-47d1-9108-5a1d4051c4ff",
+      "id": "8c886f0a-2e07-4de4-a33c-f2e24ef4e072",
       "name": "Rejected — nothing rendered",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
@@ -1076,7 +1076,7 @@
           "appendAttribution": false
         }
       },
-      "id": "492fe327-aa7c-4975-b01e-4700ae04f412",
+      "id": "cbf225af-8674-4d00-8ccb-133210851c78",
       "name": "Telegram: Bad Reply",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -1092,7 +1092,7 @@
     },
     {
       "parameters": {},
-      "id": "055c1f98-4cb6-4fc6-8cd1-c7b4f08acad2",
+      "id": "c81e98de-a215-4297-b7fc-07cd53309d86",
       "name": "Bad reply — nothing rendered",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
@@ -1108,7 +1108,7 @@
         "width": 1100,
         "color": 4
       },
-      "id": "9c3a08f3-9b24-4688-8a45-3105a09aaa85",
+      "id": "7603a9bb-cad3-4d55-9483-cc7abc8604cd",
       "name": "Note 41",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -1133,7 +1133,7 @@
           }
         }
       },
-      "id": "2896e73b-133d-4c13-9c98-80195dede14f",
+      "id": "4a1ee9a1-6c86-4514-9031-fce2fd59266c",
       "name": "Render",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -1159,7 +1159,7 @@
           }
         }
       },
-      "id": "02487392-1d25-4dde-b18e-04ba677fc5ae",
+      "id": "6685eda3-101e-4ae2-9a10-5a1551d2b82f",
       "name": "Package",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -1179,7 +1179,7 @@
           "appendAttribution": false
         }
       },
-      "id": "fa987817-2c68-40b9-a50a-85e1993dd248",
+      "id": "c1c601f3-56d6-4551-9a78-e3f2de53965d",
       "name": "Telegram: Delivered",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -1209,7 +1209,7 @@
           }
         }
       },
-      "id": "8165bae9-d539-4217-b9f6-434424a05c61",
+      "id": "fd56f401-c358-4413-9f76-b936d1f74c32",
       "name": "Log",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -1221,7 +1221,7 @@
     },
     {
       "parameters": {},
-      "id": "13ef2c19-f631-40dd-93b0-2fac569cdb94",
+      "id": "0b2ef74c-abd1-4e82-a936-b5e73f449044",
       "name": "Done",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
@@ -1440,14 +1440,14 @@
       "main": [
         [
           {
-            "node": "Wait 20s",
+            "node": "Wait 70s",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Wait 20s": {
+    "Wait 70s": {
       "main": [
         [
           {
@@ -1520,7 +1520,7 @@
       "main": [
         [
           {
-            "node": "Wait 20s",
+            "node": "Wait 70s",
             "type": "main",
             "index": 0
           }
