@@ -265,14 +265,25 @@ def predict_candidate(words: Sequence[Dict[str, Any]], rms: Sequence[float], sta
 def predict_all(candidates: Sequence[Dict[str, Any]], words: Sequence[Dict[str, Any]], rms: Sequence[float],
                 hop_s: float = 0.1, target_len: float = 30.0, source_w: int = 1920,
                 source_h: int = 1080) -> Tuple[List[Dict[str, Any]], Optional[int]]:
-    """Adds ``predict`` to each candidate (copied) and returns (candidates, recommended_rank)."""
+    """Adds ``predict`` to each candidate (copied) and returns (candidates, recommended_rank).
+
+    ``recommended_rank`` is ``None`` unless some candidate is both a ``strong_moment`` (real game
+    action, from the scorer) AND scores at least ``MIN_RECOMMEND_TOTAL``. "Least boring" is not
+    a recommendation; the review message tells the user when nothing qualifies.
+    """
     out: List[Dict[str, Any]] = []
     best_rank, best_total = None, -1
     for c in candidates:
         cc = dict(c)
         cc["predict"] = predict_candidate(words, rms, float(c["start"]), float(c["end"]),
                                           hop_s, target_len, source_w, source_h)
+        if not cc.get("strong_moment", True):
+            cc["predict"]["biggest_fix"] = "no game action in this window — not worth clipping as a highlight"
         out.append(cc)
-        if cc["predict"]["total"] > best_total:
+        eligible = cc.get("strong_moment", True) and cc["predict"]["total"] >= MIN_RECOMMEND_TOTAL
+        if eligible and cc["predict"]["total"] > best_total:
             best_total, best_rank = cc["predict"]["total"], cc.get("rank")
     return out, best_rank
+
+
+MIN_RECOMMEND_TOTAL = 70  # below this nothing gets the ⭐; the user still sees the list

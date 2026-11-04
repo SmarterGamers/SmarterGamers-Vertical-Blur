@@ -147,6 +147,20 @@ def _window_words(words: Sequence[Dict[str, Any]], start: float, end: float) -> 
     return [w for w in words if w["start"] >= start and w["start"] < end]
 
 
+def _inside_speech(t: float, win_words: Sequence[Dict[str, Any]], margin: float = 0.15) -> bool:
+    """True when time ``t`` falls inside (or within ``margin`` s of) a spoken word."""
+    for w in win_words:
+        if w["start"] - margin <= t <= w["end"] + margin:
+            return True
+    return False
+
+
+# A candidate is a "strong moment" only if it has real action evidence: enough non-speech onsets,
+# or a v1 firefight event, or a genuinely loud peak. Without that, the window is just talk.
+STRONG_MIN_ACTION_ONSETS = 6
+STRONG_MIN_ENERGY = 0.75
+
+
 def _mean(xs: Sequence[float]) -> float:
     return sum(xs) / len(xs) if xs else 0.0
 
@@ -201,9 +215,15 @@ def _penalties_for(words: Sequence[Dict[str, Any]], word_idx: Optional[int], sta
 def score_moments(words: Sequence[Dict[str, Any]], rms: Sequence[float], duration: float,
                   target_len: float = 30.0, onsets: Optional[Sequence[float]] = None,
                   hop_s: float = HOP_S, v1_used: bool = False, top_n: int = TOP_N,
-                  step_s: float = STEP_S) -> List[Dict[str, Any]]:
-    """Pure scoring. See module docstring for the candidate shape."""
+                  step_s: float = STEP_S, events: Optional[Sequence[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """Pure scoring. See module docstring for the candidate shape.
+
+    ``events``: v1 bf6_clipper firefight clusters (``{"start","end","peak","onset_count"}``); a window
+    overlapping one is action-confirmed. Each candidate carries ``strong_moment`` (bool) so the caller
+    can say "nothing worth clipping" instead of recommending the least-boring stretch of chat.
+    """
     onsets = list(onsets or [])
+    events = [e for e in (events or []) if isinstance(e, dict) and "start" in e and "end" in e]
     words = sorted(words, key=lambda w: w["start"])
     target_len = float(target_len)
     if duration <= 0:
@@ -235,7 +255,12 @@ def score_moments(words: Sequence[Dict[str, Any]], rms: Sequence[float], duratio
         energy = _mean(win_rms) / rms_p95 if win_rms else 0.0               # ~0..1
         peak_i = max(range(len(win_rms)), key=lambda k: win_rms[k]) if win_rms else 0
         peak_at = round(peak_i * hop_s, 2)
-        onsets_in = [t for t in onsets if start <= t < end]
+        onsets_all = [t for t in onsets if start <= t < end]
+        # An audio onset that lands inside a spoken word is almost always speech (plosives, laughs),
+        # not game action. A stream-setup chat with no gameplay produced "35 action hits" this way.
+        # Count only onsets that fall OUTSIDE word spans (with a small margin) as action.
+        onsets_in = [t for t in onsets_all if not _inside_speech(t, win_words)]
+        speech_onsets = len(onsets_all) - len(onsets_in)
         speech_density = len(win_words) / target_len                         # words / s
         exclaims = [w for w in win_words if _is_exclaim_or_question(w["word"])]
         text = " ".join(_norm_word(w["word"]) for w in win_words)
@@ -255,12 +280,27 @@ def score_moments(words: Sequence[Dict[str, Any]], rms: Sequence[float], duratio
                         + [peak_at if energy > 0.5 else target_len])
         hook_pos = 1.0 - max(0.0, min(1.0, (first_hit - 2.0) / target_len))
 
+        v1_events_in = [e for e in events if float(e["end"]) > start and float(e["start"]) < end]
+        # Strong = real action (non-speech onsets / v1 firefight / a loud peak) OR a genuine reaction
+        # moment (payoff phrase like "no way"/"let's go" with raised energy). Plain chat is neither.
+        # "Loud peak" is judged against the WHOLE VOD (peak vs global p95 AND clearly above the global
+        # mean), so a flat, uniformly noisy recording cannot register as loud everywhere.
+        peak_rms = max(win_rms) if win_rms else 0.0
+        loud_peak = (rms_mean > 0 and peak_rms >= STRONG_MIN_ENERGY * rms_p95 and peak_rms >= 2.0 * rms_mean)
+        reaction = bool(phrase_hits) and exclaim_score >= 0.6 and (loud_peak or energy >= 0.3) and rms_p95 > 1.5 * rms_mean
+        strong = (len(onsets_in) >= STRONG_MIN_ACTION_ONSETS or bool(v1_events_in) or loud_peak or reaction)
+
         score = (0.28 * min(1.0, energy) + 0.22 * onset_score + 0.28 * exclaim_score
                  + 0.09 * density_score + 0.05 * pacing_score + 0.08 * hook_pos)
+        if v1_events_in:
+            score = min(1.0, score + 0.15)        # confirmed firefight: clear bonus
 
         pens = _penalties_for(words, widx, start, win_words, len(onsets_in), rms, hop_s, silence_thr)
+        if not strong:
+            pens.append("no_action")              # talk only: cannot be a highlight on its own
         for p in pens:
-            score *= {"mid_sentence_start": 0.85, "leading_silence": 0.7, "no_speech_no_onsets": 0.3}[p]
+            score *= {"mid_sentence_start": 0.85, "leading_silence": 0.7,
+                      "no_speech_no_onsets": 0.3, "no_action": 0.5}[p]
 
         # ---- reason: strongest signals, with clip-relative timestamps ----
         parts: List[str] = []
@@ -285,6 +325,12 @@ def score_moments(words: Sequence[Dict[str, Any]], rms: Sequence[float], duratio
                 parts.append(f"dense talk ({speech_density:.1f} w/s)")
         if not parts:
             parts.append("quiet window" if not win_words else "steady talk")
+        if v1_events_in:
+            ev = v1_events_in[0]
+            parts.insert(0, f"firefight detected at {fmt_ts(max(0.0, float(ev.get('peak', ev['start'])) - start))}")
+        if not strong:
+            parts = [p for p in parts if not p.endswith("w/s)")] or parts
+            parts.append("talk only, no game action detected")
         reason = " + ".join(parts)
         if pens:
             reason += f" (−{', '.join(pens)})"
@@ -292,8 +338,10 @@ def score_moments(words: Sequence[Dict[str, Any]], rms: Sequence[float], duratio
         raw.append({
             "start": round(start, 2), "end": round(end, 2), "duration": round(target_len, 2),
             "score": round(max(0.0, min(1.0, score)), 4), "reason": reason,
+            "strong_moment": bool(strong),
             "signals": {
                 "audio_energy": round(energy, 4), "onsets": len(onsets_in),
+                "speech_onsets": speech_onsets, "v1_events": len(v1_events_in),
                 "speech_density": round(speech_density, 3), "exclaim": round(exclaim_score, 4),
                 "pacing": round(pacing, 3), "peak_at": peak_at, "first_hit": round(first_hit, 2),
                 "hook_pos": round(hook_pos, 3), "payoff_words": len(payoff_hits),

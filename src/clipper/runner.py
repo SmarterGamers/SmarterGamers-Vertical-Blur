@@ -195,10 +195,14 @@ class Stages:
         cands = score_moments.score_moments(
             words, sig["rms"], duration, target_len=target_len, onsets=sig["onsets"],
             hop_s=sig.get("hop_s", 0.1), v1_used=bool(sig.get("v1_used")),
+            events=sig.get("events") or [],
         )
         (job_dir / "candidates.json").write_text(json.dumps(cands, indent=1), encoding="utf-8")
+        strong = [c for c in cands if c.get("strong_moment")]
+        verdict = ("ok" if strong else
+                   "no_strong_moment: no game action found in this VOD — the candidates below are talk only")
         return {"candidates": cands, "target_len": target_len, "v1_used": bool(sig.get("v1_used")),
-                "words": len(words)}
+                "words": len(words), "strong_count": len(strong), "verdict": verdict}
 
     # ---------------------------------------------------------------- POST /predict
     def predict(self, body: Dict[str, Any]) -> Dict[str, Any]:

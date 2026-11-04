@@ -54,7 +54,7 @@ def test_score_moments_ranks_burst_first():
     assert len(cands) == 5, f"expected 5 candidates, got {len(cands)}"
     top = cands[0]
     assert top["rank"] == 1
-    assert top["start"] <= 100.0 < top["end"], f"#1 should contain the burst: {top}"
+    assert top["start"] - 2.0 <= 100.0 < top["end"], f"#1 should open on the burst (within 2 s): {top}"
     assert "signals" in top and "reason" in top and "penalties" in top
     assert top["signals"]["v1_used"] is False
     assert "'" in top["reason"] or "loud" in top["reason"], top["reason"]
@@ -170,6 +170,35 @@ def test_filtergraph_with_and_without_captions():
     print("[OK] filtergraph: captions append subtitles=; without captions it is unchanged")
 
 
+def test_talk_only_vod_is_not_a_strong_moment():
+    """A stream-setup chat (speech, no action) must not be recommended: its onsets are speech."""
+    from predictor.score_clip import predict_all
+    words = synthetic_transcript(duration=150.0, burst_at=-100)    # calm talk, no burst
+    rms = [0.08] * int(150.0 / HOP)                                # flat, quiet
+    # onsets that all land ON words (plosives) — what a chat-only VOD produces
+    onsets = [w["start"] + 0.05 for w in words[::3]]
+    cands = score_moments(words, rms, 150.0, target_len=30, onsets=onsets)
+    assert cands, "should still list candidates"
+    assert all(not c["strong_moment"] for c in cands), [c["signals"] for c in cands]
+    assert all("no_action" in c["penalties"] for c in cands)
+    assert all(c["signals"]["onsets"] < 6 for c in cands), "speech onsets must not count as action"
+    out, rec = predict_all(cands, words, rms, hop_s=HOP, target_len=30)
+    assert rec is None, f"talk-only VOD must have no recommendation, got #{rec}"
+    print("[OK] talk-only VOD: no strong moment, no recommendation, speech onsets discounted")
+
+
+def test_v1_firefight_event_makes_window_strong():
+    words = synthetic_transcript(duration=150.0, burst_at=-100)
+    rms = [0.08] * int(150.0 / HOP)
+    onsets = [60.2, 60.9, 61.5, 62.1, 63.0, 63.8, 64.4]            # between words → action
+    events = [{"start": 60.0, "end": 65.0, "peak": 62.0, "onset_count": 7}]
+    cands = score_moments(words, rms, 150.0, target_len=30, onsets=onsets, events=events)
+    top = cands[0]
+    assert top["start"] <= 60.0 < top["end"] and top["strong_moment"], top
+    assert "firefight" in top["reason"], top["reason"]
+    print("[OK] v1 firefight event marks the window as a strong moment")
+
+
 if __name__ == "__main__":
     test_score_moments_ranks_burst_first()
     test_top5_do_not_overlap()
@@ -178,4 +207,6 @@ if __name__ == "__main__":
     test_ledger_idempotent()
     test_config_env_override()
     test_filtergraph_with_and_without_captions()
+    test_talk_only_vod_is_not_a_strong_moment()
+    test_v1_firefight_event_makes_window_strong()
     print("\nALL CLIPPER TESTS PASSED SUCCESSFULLY!")

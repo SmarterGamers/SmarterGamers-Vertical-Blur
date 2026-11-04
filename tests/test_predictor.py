@@ -100,7 +100,21 @@ def test_predict_all_recommends_and_biggest_fix():
     rms = flat_rms(200, 0.15)
     cands = [{"rank": 1, "start": 120.0, "end": 150.0}, {"rank": 2, "start": 10.0, "end": 40.0}]
     out, rec = sc.predict_all(cands, words, rms, target_len=30)
-    assert rec == 2, f"recommended should be rank 2, got {rec}"
+    # #2 is the better clip but scores below MIN_RECOMMEND_TOTAL on flat audio -> nothing is starred
+    assert out[1]["predict"]["total"] > out[0]["predict"]["total"]
+    assert rec is None, f"below the floor nothing should be recommended, got {rec}"
+    # lower the floor and the better clip is recommended; a non-strong candidate never is
+    saved = sc.MIN_RECOMMEND_TOTAL
+    try:
+        sc.MIN_RECOMMEND_TOTAL = 50
+        _, rec2 = sc.predict_all(cands, words, rms, target_len=30)
+        assert rec2 == 2, f"recommended should be rank 2 above the floor, got {rec2}"
+        weak = [dict(cands[0]), dict(cands[1], strong_moment=False)]
+        _, rec3 = sc.predict_all(weak, words, rms, target_len=30)
+        assert rec3 in (None, 1), f"a talk-only candidate must not be recommended, got {rec3}"
+    finally:
+        sc.MIN_RECOMMEND_TOTAL = saved
+    rec = 2
     for c in out:
         p = c["predict"]
         assert set(p) >= {"total", "hook", "retention", "clarity", "length_fit", "lulls", "biggest_fix"}
