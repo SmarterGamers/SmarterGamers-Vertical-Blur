@@ -601,7 +601,7 @@
       "parameters": {
         "resource": "message",
         "operation": "sendMessage",
-        "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
+        "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
         "text": "={{ $json.text }}",
         "additionalFields": {
           "appendAttribution": false
@@ -880,8 +880,8 @@
       "parameters": {
         "resource": "message",
         "operation": "sendMessage",
-        "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
-        "text": "={{ '⏱ Personal Clipper — no reply in ' + $('Config').item.json.REVIEW_TIMEOUT_HOURS + ' h for ' + $('Build Review Message').first().json.original + '. Nothing rendered. Working files kept at ' + $('Build Review Message').first().json.job_dir }}",
+        "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ '⏱ Personal Clipper — no reply in ' + $('Config').first().json.REVIEW_TIMEOUT_HOURS + ' h for ' + $('Build Review Message').first().json.original + '. Nothing rendered. Working files kept at ' + $('Build Review Message').first().json.job_dir }}",
         "additionalFields": {
           "appendAttribution": false
         }
@@ -1035,7 +1035,7 @@
       "parameters": {
         "resource": "message",
         "operation": "sendMessage",
-        "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
+        "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
         "text": "={{ '🚫 Nothing rendered, working files kept at ' + $json.job_dir }}",
         "additionalFields": {
           "appendAttribution": false
@@ -1070,7 +1070,7 @@
       "parameters": {
         "resource": "message",
         "operation": "sendMessage",
-        "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
+        "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
         "text": "={{ '❓ ' + $json.error + '. Nothing rendered, working files kept at ' + $json.job_dir + '. Reply formats: a number, \"2 start 5s earlier\", \"2 end 3s later\", or \"reject all\".' }}",
         "additionalFields": {
           "appendAttribution": false
@@ -1120,7 +1120,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Config').item.json.RUNNER_URL }}/render",
+        "url": "={{ $('Config').first().json.RUNNER_URL }}/render",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { job_id: $json.job_id, rank: $json.rank, start: $json.start, end: $json.end, captions: $json.captions, offset: $json.offset, audio_mode: $json.audio_mode, volume: $json.volume } }}",
@@ -1146,10 +1146,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Config').item.json.RUNNER_URL }}/package",
+        "url": "={{ $('Config').first().json.RUNNER_URL }}/package",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { job_id: $('Parse Reply').item.json.job_id, rank: $('Parse Reply').item.json.rank, output: $json.output, candidate: $('Parse Reply').item.json.candidate } }}",
+        "jsonBody": "={{ { job_id: $('Parse Reply').first().json.job_id, rank: $('Parse Reply').first().json.rank, output: $json.output, candidate: $('Parse Reply').first().json.candidate } }}",
         "options": {
           "timeout": 600000,
           "response": {
@@ -1173,8 +1173,8 @@
       "parameters": {
         "resource": "message",
         "operation": "sendMessage",
-        "chatId": "={{ $('Config').item.json.TELEGRAM_CHAT_ID }}",
-        "text": "={{ '✅ Rendered ' + $('Parse Reply').item.json.original + ' → clip #' + $('Parse Reply').item.json.rank + '\\n' + 'Output: ' + $('Render').item.json.output + '\\n' + 'Score: ' + ($('Parse Reply').item.json.candidate.predict ? $('Parse Reply').item.json.candidate.predict.total : '?') + '/100   ' + $('Parse Reply').item.json.start + 's → ' + $('Parse Reply').item.json.end + 's (' + $('Parse Reply').item.json.duration + 's)\\n' + 'Encoder: ' + $('Render').item.json.encoder + '\\n' + 'CapCut package: ' + $json.package_dir }}",
+        "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ '✅ Rendered ' + $('Parse Reply').first().json.original + ' → clip #' + $('Parse Reply').first().json.rank + '\\n' + 'Output: ' + $('Render').first().json.output + '\\n' + 'Score: ' + ($('Parse Reply').first().json.candidate.predict ? $('Parse Reply').first().json.candidate.predict.total : '?') + '/100   ' + $('Parse Reply').first().json.start + 's → ' + $('Parse Reply').first().json.end + 's (' + $('Parse Reply').first().json.duration + 's)\\n' + 'Encoder: ' + $('Render').first().json.encoder + '\\n' + 'CapCut package: ' + $json.package_dir }}",
         "additionalFields": {
           "appendAttribution": false
         }
@@ -1196,10 +1196,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Config').item.json.RUNNER_URL }}/log",
+        "url": "={{ $('Config').first().json.RUNNER_URL }}/log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { job_id: $('Parse Reply').item.json.job_id, input: $('Parse Reply').item.json.input, candidates: $('Parse Reply').item.json.candidates, approved: { rank: $('Parse Reply').item.json.rank, start: $('Parse Reply').item.json.start, end: $('Parse Reply').item.json.end, reply: $('Parse Reply').item.json.reply }, output: $('Render').item.json.output, package_dir: $('Package').item.json.package_dir, status: 'delivered' } }}",
+        "jsonBody": "={{ { job_id: $('Parse Reply').first().json.job_id, input: $('Parse Reply').first().json.input, candidates: $('Parse Reply').first().json.candidates, approved: { rank: $('Parse Reply').first().json.rank, start: $('Parse Reply').first().json.start, end: $('Parse Reply').first().json.end, reply: $('Parse Reply').first().json.reply }, output: $('Render').first().json.output, package_dir: $('Package').first().json.package_dir, status: 'delivered' } }}",
         "options": {
           "timeout": 120000,
           "response": {
