@@ -604,7 +604,8 @@
         "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
         "text": "={{ $json.text }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "None"
         }
       },
       "id": "d99e76bc-c01f-444a-bf5d-552f07e93eee",
@@ -883,7 +884,8 @@
         "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
         "text": "={{ '⏱ Personal Clipper — no reply in ' + $('Config').first().json.REVIEW_TIMEOUT_HOURS + ' h for ' + $('Build Review Message').first().json.original + '. Nothing rendered. Working files kept at ' + $('Build Review Message').first().json.job_dir }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "None"
         }
       },
       "id": "a8a90341-5bc9-4ee5-82f2-ee65371244fa",
@@ -1038,7 +1040,8 @@
         "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
         "text": "={{ '🚫 Nothing rendered, working files kept at ' + $json.job_dir }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "None"
         }
       },
       "id": "c7731105-ec80-4c05-a580-d938a68b2b24",
@@ -1073,7 +1076,8 @@
         "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
         "text": "={{ '❓ ' + $json.error + '. Nothing rendered, working files kept at ' + $json.job_dir + '. Reply formats: a number, \"2 start 5s earlier\", \"2 end 3s later\", or \"reject all\".' }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "None"
         }
       },
       "id": "cbf225af-8674-4d00-8ccb-133210851c78",
@@ -1176,7 +1180,8 @@
         "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
         "text": "={{ '✅ Rendered ' + $('Parse Reply').first().json.original + ' → clip #' + $('Parse Reply').first().json.rank + '\\n' + 'Output: ' + $('Render').first().json.output + '\\n' + 'Score: ' + ($('Parse Reply').first().json.candidate.predict ? $('Parse Reply').first().json.candidate.predict.total : '?') + '/100   ' + $('Parse Reply').first().json.start + 's → ' + $('Parse Reply').first().json.end + 's (' + $('Parse Reply').first().json.duration + 's)\\n' + 'Encoder: ' + $('Render').first().json.encoder + '\\n' + 'CapCut package: ' + $json.package_dir }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "None"
         }
       },
       "id": "c1c601f3-56d6-4551-9a78-e3f2de53965d",
