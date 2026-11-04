@@ -140,10 +140,12 @@ def _write_cached_device(cache: Optional[Path], device: str, compute: str) -> No
 
 def transcribe_job(job_dir: Path, source: Path, model_name: str = "small.en", device: str = "auto",
                    python_exe: Optional[str] = None, device_cache: Optional[Path] = None,
-                   timeout_sec: int = 3600) -> Dict[str, Any]:
+                   timeout_sec: int = 3600, media_sec: Optional[float] = None) -> Dict[str, Any]:
     """Transcribes ``source`` via a child process and writes transcript.json / transcript.srt.
 
     ``device``: ``auto`` (cuda then cpu, honouring the cache), ``cuda`` or ``cpu``.
+    ``media_sec``: source duration; when given, each attempt gets a cap derived from it (see loop)
+    so a hung GPU child falls through to CPU quickly instead of blocking for ``timeout_sec``.
     Returns the /transcribe payload (without ``ok``). Raises :class:`TranscribeError`.
     """
     job_dir = Path(job_dir)
@@ -169,11 +171,17 @@ def transcribe_job(job_dir: Path, source: Path, model_name: str = "small.en", de
         cmd = [py, "-X", "faulthandler", str(Path(__file__).resolve()), "--worker",
                "--input", str(source), "--output", str(raw_json),
                "--device", dev, "--compute-type", comp, "--model", model_name]
+        # Per-attempt cap. A GPU child can HANG (not crash) when the GPU is busy with OBS/NVENC/etc.;
+        # without a tight cap it held the runner thread for an hour. CUDA normally finishes a 1 h VOD
+        # in well under a minute, so give it 60 s + 0.5x media length; CPU gets 120 s + 6x media length.
+        ratio = 0.5 if dev == "cuda" else 6.0
+        base = 60 if dev == "cuda" else 120
+        attempt_timeout = int(min(timeout_sec, base + ratio * max(0.0, media_sec or 0.0))) if media_sec else timeout_sec
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, creationflags=_NO_WINDOW,
-                                  timeout=timeout_sec)
+                                  timeout=attempt_timeout)
         except subprocess.TimeoutExpired:
-            errors.append(f"{dev}/{comp}: timed out after {timeout_sec} s")
+            errors.append(f"{dev}/{comp}: timed out after {attempt_timeout} s")
             continue
         if proc.returncode == 0 and raw_json.exists():
             used = (dev, comp)

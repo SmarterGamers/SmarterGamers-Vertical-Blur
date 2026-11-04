@@ -176,6 +176,7 @@ class Stages:
                 device=str(body.get("device") or self.cfg.WHISPER_DEVICE),
                 python_exe=str(self.cfg.PYTHON_EXE),
                 device_cache=self.cfg.WHISPER_DEVICE_CACHE,
+                media_sec=float(meta.get("duration_sec") or 0.0) or None,
             )
         except transcribe_mod.TranscribeError as exc:
             raise StageError("transcribe", str(exc), exc.fix)
@@ -457,8 +458,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="SmarterGamers Personal Clipper runner")
     parser.add_argument("--host", default=None, help="bind host (default from config: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=None, help="bind port (default from config: 5690)")
+    parser.add_argument("--log", default=None,
+                        help="append stdout/stderr to this file (default: <LEDGER dir>\\runner.log; "
+                             "'-' keeps the console). The scheduled task runs hidden, so without this "
+                             "every access-log line and traceback is lost.")
     args = parser.parse_args(argv)
     cfg = load_config()
+    log_path = args.log if args.log is not None else str(Path(cfg.LEDGER).parent / "runner.log")
+    if log_path != "-":
+        try:
+            Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+            fh = open(log_path, "a", encoding="utf-8", buffering=1)
+            sys.stdout = fh
+            sys.stderr = fh
+        except OSError as exc:
+            print(f"[runner] could not open log {log_path}: {exc}; logging to console", flush=True)
     server = serve(cfg, args.host, args.port)
     print(f"[runner] listening on http://{server.server_address[0]}:{server.server_address[1]} "
           f"(repo={cfg.REPO_DIR}, python={cfg.PYTHON_EXE})", flush=True)
