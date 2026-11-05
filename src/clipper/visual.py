@@ -30,10 +30,14 @@ STATIC_DIFF = 1.5              # mean abs diff on the 9x8 thumbnail
 UI_SAT_MAX = 0.35
 UI_FLAT_MIN = 0.18
 UI_LUMA_MAX = 85
-UI_MOTION_MAX = 4.0            # a UI frame must also be near-motionless (dark gameplay moves; menus don't)
+UI_MOTION_MAX = 4.0            # a dim UI frame must also be near-motionless (dusk gameplay moves; menus don't)
+DARK_LUMA_MAX = 16             # ...unless it is near-black and flat: settings/pause menus with a moving cursor
+DARK_FLAT_MIN = 0.6
+STATIC_RUN_MIN = 5             # a freeze counts fully only when it lasts >= 5 s (scoreboard, map, trophy screen)
 TAIL_SEC = 10.0                # "ends on a menu" looks at the last 10 s
-TAIL_BAD_FRACTION = 0.6        # ...and calls it bad when >= 60 % of those frames are bad
-BAD_WINDOW_FRACTION = 0.4      # whole window is bad when >= 40 % of frames are bad
+TAIL_BAD_FRACTION = 0.5        # ...and calls it bad when >= 50 % of those frames are bad
+BAD_WINDOW_FRACTION = 0.5      # whole window is bad when the weighted bad share is >= 50 %
+MIN_GOOD_PREFIX_SEC = 12.0     # ...unless >= 12 s of clean footage precede the junk: then it's "cut it there"
 FACECAM_DRAWBOX = "drawbox=x=0:y=ih-ih*0.42:w=iw*0.22:h=ih*0.42:color=black:t=fill"
 _NO_WINDOW = 0x08000000 if hasattr(subprocess, "STARTUPINFO") else 0
 
@@ -133,33 +137,58 @@ def window_visual_stats(source: Path, start: float, end: float, source_w: int = 
             continue
         label = "ok"
         motion = sum(abs(x - y) for x, y in zip(a["thumb"], prev)) / 72.0 if prev is not None else None
+        dark_flat = a["med_luma"] <= DARK_LUMA_MAX and a["flat"] >= DARK_FLAT_MIN
         if refs and any((a["dhash"] ^ ref).bit_count() <= MAX_HAMMING for ref in refs):
             label = "menu"
-        elif (a["sat"] <= UI_SAT_MAX and a["flat"] >= UI_FLAT_MIN and a["med_luma"] <= UI_LUMA_MAX
-              and (motion is None or motion < UI_MOTION_MAX)):
+        elif dark_flat:
             label = "ui"
         elif motion is not None and motion < STATIC_DIFF:
             label = "static"
+        elif (a["sat"] <= UI_SAT_MAX and a["flat"] >= UI_FLAT_MIN and a["med_luma"] <= UI_LUMA_MAX
+              and motion is not None and motion < UI_MOTION_MAX):
+            label = "static"          # dim, flat and barely moving: treat like a freeze
         if label != "ok":
             counts[label] += 1
         labels.append(label)
         prev = a["thumb"]
     n = len(labels)
-    bad = [lab != "ok" for lab in labels]
+    # Weighting: menu/black/dark-UI frames are always bad; a freeze is fully bad only as a run >= STATIC_RUN_MIN
+    # (shorter stills happen in real play), otherwise half.
+    weight = [0.0] * n
+    i = 0
+    while i < n:
+        lab = labels[i]
+        j = i
+        while j < n and labels[j] == lab:
+            j += 1
+        if lab in ("menu", "black", "ui"):
+            w = 1.0
+        elif lab == "static":
+            w = 1.0 if (j - i) >= STATIC_RUN_MIN else 0.5
+        else:
+            w = 0.0
+        for k in range(i, j):
+            weight[k] = w
+        i = j
+    bad = [w > 0 for w in weight]
     bad_n = sum(bad)
+    weighted = sum(weight) / n
     tail_n = max(1, min(n, int(round(TAIL_SEC * fps))))
     tail_bad = sum(bad[-tail_n:]) / tail_n
-    # where does the final bad run begin? (only meaningful when the tail is bad)
+    # where does the final bad stretch begin? (allow single-frame gaps)
     bad_from = None
-    if tail_bad >= TAIL_BAD_FRACTION:
+    if tail_bad >= TAIL_BAD_FRACTION or weighted >= BAD_WINDOW_FRACTION:
         i = n - 1
-        while i >= 0 and bad[i]:
+        while i >= 0 and (bad[i] or (i - 1 >= 0 and bad[i - 1])):
             i -= 1
-        # allow one-frame gaps inside the run
-        bad_from = round((i + 1) / fps, 1)
+        if i < n - 1:
+            bad_from = round((i + 1) / fps, 1)
+    good_prefix = bad_from if bad_from is not None else (0.0 if weighted >= BAD_WINDOW_FRACTION else n / fps)
+    window_bad = weighted >= BAD_WINDOW_FRACTION and good_prefix < MIN_GOOD_PREFIX_SEC
+    tail_is_bad = tail_bad >= TAIL_BAD_FRACTION or (weighted >= BAD_WINDOW_FRACTION and not window_bad)
     return {
-        "frames": n, "bad_ratio": round(bad_n / n, 3), "menu_ratio": round(counts["menu"] / n, 3),
+        "frames": n, "bad_ratio": round(weighted, 3), "menu_ratio": round(counts["menu"] / n, 3),
         "static_ratio": round(counts["static"] / n, 3), "ui_ratio": round(counts["ui"] / n, 3),
         "black_ratio": round(counts["black"] / n, 3), "tail_bad": round(tail_bad, 3), "bad_from_sec": bad_from,
-        "window_bad": bad_n / n >= BAD_WINDOW_FRACTION, "tail_is_bad": tail_bad >= TAIL_BAD_FRACTION,
+        "window_bad": window_bad, "tail_is_bad": tail_is_bad,
     }
