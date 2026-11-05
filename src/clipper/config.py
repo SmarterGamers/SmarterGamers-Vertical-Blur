@@ -47,7 +47,7 @@ class ClipperConfig:
     GAME: str = ""                     # name used in the social copy; blank = "gameplay" (streams rotate games)
     MIN_SOURCE_SEC: float = 20.0       # /guard: shorter sources are skipped as too_short
     WHISPER_MODEL: str = "small.en"
-    WHISPER_DEVICE: str = "auto"       # auto (cuda then cpu, cached) | cuda | cpu
+    WHISPER_DEVICE: str = "auto"       # auto (cuda then cpu, cached) | cuda | cuda:N (pin to GPU N) | cpu
     WHISPER_DEVICE_CACHE: Path = Path(r"C:\SmarterGamers\Clips\.whisper_device")
 
     # Runner binding (the runner itself; n8n reaches it through RUNNER_URL)

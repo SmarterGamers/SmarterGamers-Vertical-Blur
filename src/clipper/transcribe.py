@@ -93,8 +93,11 @@ def run_worker(source: Path, out_json: Path, device: str, compute_type: str, mod
     except ImportError as exc:
         sys.stderr.write(f"faster-whisper import failed: {exc}\n")
         return 2
+    # ``cuda:1`` → device="cuda", device_index=1 (pin Whisper to a specific GPU, e.g. a second card).
+    dev, _, idx = device.partition(":")
+    kwargs = {"device_index": int(idx)} if dev == "cuda" and idx.isdigit() else {}
     try:
-        model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        model = WhisperModel(model_name, device=dev, compute_type=compute_type, **kwargs)
     except Exception as exc:
         sys.stderr.write(f"model load failed ({model_name}, {device}/{compute_type}): {exc}\n")
         return 3
@@ -122,7 +125,7 @@ def _read_cached_device(cache: Optional[Path]) -> Optional[Tuple[str, str]]:
     try:
         if cache and cache.is_file():
             dev, _, comp = cache.read_text(encoding="utf-8").strip().partition("/")
-            if dev in ("cuda", "cpu") and comp:
+            if (dev == "cpu" or dev.startswith("cuda")) and comp:
                 return dev, comp
     except OSError:
         pass
@@ -143,7 +146,8 @@ def transcribe_job(job_dir: Path, source: Path, model_name: str = "small.en", de
                    timeout_sec: int = 3600, media_sec: Optional[float] = None) -> Dict[str, Any]:
     """Transcribes ``source`` via a child process and writes transcript.json / transcript.srt.
 
-    ``device``: ``auto`` (cuda then cpu, honouring the cache), ``cuda`` or ``cpu``.
+    ``device``: ``auto`` (cuda then cpu, honouring the cache), ``cuda``, ``cuda:N`` (pin to GPU N) or ``cpu``.
+    A pinned GPU still falls back to CPU if its child fails, so a missing second card never blocks a job.
     ``media_sec``: source duration; when given, each attempt gets a cap derived from it (see loop)
     so a hung GPU child falls through to CPU quickly instead of blocking for ``timeout_sec``.
     Returns the /transcribe payload (without ``ok``). Raises :class:`TranscribeError`.
@@ -154,6 +158,8 @@ def transcribe_job(job_dir: Path, source: Path, model_name: str = "small.en", de
 
     if device == "cuda":
         attempts: List[Tuple[str, str]] = [("cuda", "float16")]
+    elif device.startswith("cuda:"):
+        attempts = [(device, "float16"), ("cpu", "int8")]
     elif device == "cpu":
         attempts = [("cpu", "int8")]
     else:
@@ -174,8 +180,8 @@ def transcribe_job(job_dir: Path, source: Path, model_name: str = "small.en", de
         # Per-attempt cap. A GPU child can HANG (not crash) when the GPU is busy with OBS/NVENC/etc.;
         # without a tight cap it held the runner thread for an hour. CUDA normally finishes a 1 h VOD
         # in well under a minute, so give it 60 s + 0.5x media length; CPU gets 120 s + 6x media length.
-        ratio = 0.5 if dev == "cuda" else 6.0
-        base = 60 if dev == "cuda" else 120
+        ratio = 0.5 if dev.startswith("cuda") else 6.0
+        base = 60 if dev.startswith("cuda") else 120
         attempt_timeout = int(min(timeout_sec, base + ratio * max(0.0, media_sec or 0.0))) if media_sec else timeout_sec
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, creationflags=_NO_WINDOW,
