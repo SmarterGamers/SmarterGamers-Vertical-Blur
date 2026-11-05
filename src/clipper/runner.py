@@ -339,12 +339,79 @@ class Stages:
         tj = job_dir / "transcript.json"
         words = transcribe_mod.load_words(tj) if tj.exists() else []
         try:
-            return capcut_package.build_package(self.cfg, job_dir, output, rank, candidate,
-                                               meta["original_stem"], words,
-                                               game=str(body.get("game") or self.cfg.GAME or "gameplay"),
-                                               channel=str(body.get("channel") or "SmarterGamers"))
+            result = capcut_package.build_package(self.cfg, job_dir, output, rank, candidate,
+                                                 meta["original_stem"], words,
+                                                 game=str(body.get("game") or self.cfg.GAME or "gameplay"),
+                                                 channel=str(body.get("channel") or "SmarterGamers"))
         except Exception as exc:
             raise StageError("package", f"package build failed: {exc}", None)
+        # Review preview for Telegram (bot uploads are capped at 50 MB): the full render when it fits,
+        # otherwise a 720x1280 re-encode next to it in the package dir.
+        try:
+            result["preview"] = str(self._preview_for(output, Path(result["package_dir"])))
+        except Exception as exc:  # a missing preview must never fail the package
+            result["preview"] = None
+            result["preview_error"] = str(exc)
+        return result
+
+    def _preview_for(self, output: Path, pkg_dir: Path) -> Path:
+        limit = self.cfg.PREVIEW_MAX_MB * 1024 * 1024
+        if output.stat().st_size <= limit:
+            return output
+        preview = pkg_dir / f"{output.stem}_preview.mp4"
+        if preview.exists() and preview.stat().st_size <= limit:
+            return preview
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(output), "-vf", "scale=720:-2", "-c:v", "libx264",
+               "-preset", "veryfast", "-crf", "27", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
+               "-movflags", "+faststart", str(preview)]
+        subprocess.run(cmd, capture_output=True, timeout=600, check=True)
+        return preview
+
+    # ---------------------------------------------------------------- POST /upload
+    def upload(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Posts one rendered clip to YouTube Shorts. Only called after an explicit "post" reply.
+
+        Runs ``scripts/yt_post.py`` inside the Shorts pipeline's own venv so its OAuth token and uploader
+        are reused as-is (no second credential, no copied code). Returns ``{video_id, url, privacy, title}``.
+        """
+        output = Path(str(body.get("output", "")))
+        if not output.is_file():
+            raise StageError("upload", f"clip not found: {output}", "render it first")
+        if not self.cfg.YT_PYTHON.is_file():
+            raise StageError("upload", f"YouTube pipeline python not found: {self.cfg.YT_PYTHON}",
+                             "set SG_CLIPPER_YT_PYTHON / SG_CLIPPER_YT_PIPELINE_DIR")
+        candidate = body.get("candidate") or {}
+        privacy = str(body.get("privacy") or self.cfg.POST_PRIVACY or "public").lower()
+        if privacy not in ("public", "unlisted", "private"):
+            privacy = "public"
+        job_dir = self.job_dir(str(body.get("job_id", "")))
+        tj = job_dir / "transcript.json"
+        words = transcribe_mod.load_words(tj) if tj.exists() else []
+        start, end = float(candidate.get("start", 0)), float(candidate.get("end", 0))
+        spoken = " ".join(w["word"] for w in words if start <= w["start"] < end)[:300]
+        req = {
+            "clip": str(output), "privacy": privacy,
+            "title": str(body.get("title") or "").strip(),
+            "hook": str((candidate.get("llm") or {}).get("hook_line") or ""),
+            "reason": str(candidate.get("reason") or ""),
+            "spoken": spoken,
+            "game": str(body.get("game") or self.cfg.GAME or ""),
+            "original": self.meta(job_dir).get("original", output.stem),
+        }
+        script = self.cfg.REPO_DIR / "scripts" / "yt_post.py"
+        try:
+            proc = subprocess.run([str(self.cfg.YT_PYTHON), "-X", "utf8", str(script)],
+                                  input=json.dumps(req), capture_output=True, text=True, encoding="utf-8",
+                                  cwd=str(self.cfg.YT_PIPELINE_DIR), timeout=900, creationflags=_NO_WINDOW)
+        except subprocess.TimeoutExpired:
+            raise StageError("upload", "YouTube upload timed out after 15 min", None)
+        if proc.returncode != 0:
+            raise StageError("upload", f"uploader failed: {(proc.stderr or proc.stdout).strip()[-600:]}", None)
+        try:
+            out = json.loads(proc.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            raise StageError("upload", f"uploader returned no JSON: {proc.stdout[-300:]}", None)
+        return out
 
     # ---------------------------------------------------------------- POST /log
     def log(self, body: Dict[str, Any]) -> Dict[str, Any]:
@@ -445,7 +512,7 @@ def make_handler(stages: Stages) -> type:
         "/guard": stages.guard, "/ingest": stages.ingest, "/transcribe": stages.transcribe,
         "/score": stages.score, "/predict": stages.predict, "/ollama_verdict": stages.ollama_verdict,
         "/render": stages.render, "/package": stages.package, "/log": stages.log,
-        "/claim_reply": stages.claim_reply,
+        "/claim_reply": stages.claim_reply, "/upload": stages.upload,
     }
 
     class Handler(BaseHTTPRequestHandler):

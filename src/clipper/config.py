@@ -40,6 +40,13 @@ class ClipperConfig:
     OLLAMA_MODEL: str = "llama3.2:latest"
     SOCIAL_WEBHOOK_URL: str = "http://localhost:5678/webhook/smartergamers-clip"
 
+    # Posting (only ever on an explicit "post" reply in the review chat). Reuses the existing YouTube
+    # uploader + OAuth token of the Shorts pipeline; nothing is duplicated and no new credential is created.
+    YT_PIPELINE_DIR: Path = Path(r"C:\Users\ultim\Desktop\Projects\SmarterGamers\smartergamers_antigravity")
+    YT_PYTHON: Path = Path(r"C:\Users\ultim\Desktop\Projects\SmarterGamers\smartergamers_antigravity\.venv\Scripts\python.exe")
+    POST_PRIVACY: str = "public"       # public | unlisted | private — what "post" publishes as
+    PREVIEW_MAX_MB: int = 45           # Telegram bot uploads are capped at 50 MB; previews are re-encoded under this
+
     # Behaviour
     TARGET_LEN_SEC: int = 30          # 15 / 30 / 60
     REVIEW_CHANNEL: str = "telegram"

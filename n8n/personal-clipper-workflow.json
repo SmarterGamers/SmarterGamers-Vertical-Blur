@@ -91,6 +91,18 @@
               "type": "string"
             },
             {
+              "id": "a05b0ab1-ddfa-4432-9bba-c3dbe4583466",
+              "name": "CLIPS_ROOT",
+              "value": "C:\\SmarterGamers\\Clips",
+              "type": "string"
+            },
+            {
+              "id": "e5298825-1210-4e99-ace7-2bcae5bb8d0c",
+              "name": "CONTAINER_CLIPS",
+              "value": "/data/clips",
+              "type": "string"
+            },
+            {
               "id": "cb154b92-921c-4aa6-a116-eb97e331d32e",
               "name": "LEDGER",
               "value": "C:\\SmarterGamers\\Clips\\processed.json",
@@ -142,6 +154,12 @@
               "id": "1fb7b535-b2ed-4c29-928b-0c45ccc15fb5",
               "name": "GAME",
               "value": "",
+              "type": "string"
+            },
+            {
+              "id": "b0ec8a9a-44f1-47e8-8873-c6e660400b55",
+              "name": "POST_PRIVACY",
+              "value": "public",
               "type": "string"
             },
             {
@@ -704,7 +722,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Start the getUpdates poll loop. Carries ONLY the loop state: the review payload (candidates etc.) is\n// re-read from `Build Review Message` by Parse Reply, so each poll iteration stays a few hundred bytes\n// instead of re-saving the whole candidate list (a 24 h wait would otherwise grow the execution to ~10 MB).\nconst cfg = $('Config').first().json;\nconst review = $('Build Review Message').first().json;\nconst sent = $input.first().json || {};          // Telegram node output: { ok, result: { message_id, ... } }\nconst msg = sent.result || sent;\nconst sent_at = Math.floor(Date.now() / 1000);\nconst hours = Number(cfg.REVIEW_TIMEOUT_HOURS) || 24;\nreturn [{ json: {\n  job_id: review.job_id,\n  review_message_id: msg && msg.message_id ? msg.message_id : null,\n  sent_at,\n  deadline: sent_at + hours * 3600,\n  poll_offset: 0,\n  attempts: 0,\n} }];\n"
+        "jsCode": "// Start the getUpdates poll loop. Carries ONLY the loop state: the review payload (candidates etc.) is\n// re-read from `Build Review Message` by Parse Reply, so each poll iteration stays a few hundred bytes\n// instead of re-saving the whole candidate list (a 24 h wait would otherwise grow the execution to ~10 MB).\nconst cfg = $('Config').first().json;\nconst review = $('Build Review Message').first().json;\nconst sent = $input.first().json || {};          // Telegram node output: { ok, result: { message_id, ... } }\nconst msg = sent.result || sent;\nconst sent_at = Math.floor(Date.now() / 1000);\nconst hours = Number(cfg.REVIEW_TIMEOUT_HOURS) || 24;\nreturn [{ json: {\n  phase: 'pick',\n  job_id: review.job_id,\n  review_message_id: msg && msg.message_id ? msg.message_id : null,\n  sent_at,\n  deadline: sent_at + hours * 3600,\n  poll_offset: 0,\n  attempts: 0,\n} }];\n"
       },
       "id": "02202272-75ff-4aab-918f-d8ef459d02e6",
       "name": "Init Poll",
@@ -770,7 +788,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Look for the user's reply among the getUpdates results. Loop state comes from the last run of `Wait 70s`.\n// Several reviews may be open in the same chat, so:\n//   * a Telegram \"reply to\" (long-press → Reply) is accepted only by the review it quotes;\n//   * a plain message is accepted by whichever review CLAIMS it first at the runner (/claim_reply);\n//   * forwarded messages and pasted review blocks are ignored.\n// We never advance Telegram's offset (always 0), so no review can make a message vanish for another one.\nconst cfg = $('Config').first().json;\nconst state = $('Wait 70s').first().json;\nconst resp = $input.first().json || {};\nconst chatId = String(cfg.TELEGRAM_CHAT_ID);\nconst now = Math.floor(Date.now() / 1000);\n\nconst updates = (resp.ok === true && Array.isArray(resp.result)) ? resp.result : [];\nconst attempts = (Number(state.attempts) || 0) + 1;\nconst poll_error = resp.error ? String(resp.error.message || resp.error) : (resp.ok === false ? String(resp.description || 'getUpdates not ok') : null);\nconst carry = { job_id: state.job_id, review_message_id: state.review_message_id, sent_at: state.sent_at, deadline: state.deadline };\nconst looksLikeReview = t => /BEST PICK|What happens:|Weak spot:|Clip review —/.test(t);\n\nconst mine = [];\nfor (const u of updates) {\n  const m = u.message;\n  if (!m || !m.chat || String(m.chat.id) !== chatId) continue;\n  if (!(Number(m.date) > Number(state.sent_at))) continue;\n  if (typeof m.text !== 'string' || !m.text.trim()) continue;\n  if (m.forward_origin || m.forward_date || looksLikeReview(m.text)) continue;\n  const quoted = m.reply_to_message && m.reply_to_message.message_id;\n  if (quoted && String(quoted) !== String(state.review_message_id)) continue;   // addressed to another review\n  mine.push({ u, m, addressed: !!quoted });\n}\nmine.sort((a, b) => Number(a.m.date) - Number(b.m.date));   // oldest first: claim in arrival order\n\nlet best = null;\nfor (const cand of mine) {\n  if (cand.addressed) { best = cand; break; }\n  try {\n    const r = await this.helpers.httpRequest({ method: 'POST', url: cfg.RUNNER_URL + '/claim_reply', json: true,\n      body: { update_id: cand.u.update_id, job_id: state.job_id }, timeout: 10000 });\n    if (r && r.claimed) { best = cand; break; }\n  } catch (e) {\n    // Runner too old for /claim_reply (or down): behave like before the claim existed rather than never answering.\n    if (/unknown route|404|ECONNREFUSED|claim_reply/i.test(String(e && e.message || e))) { best = cand; break; }\n  }\n}\n\nif (best) {\n  return [{ json: { ...carry, found: true, text: best.m.text.trim(), reply_date: best.m.date, update_id: best.u.update_id,\n                    next_offset: 0, attempts, timed_out: false, poll_error: null } }];\n}\nreturn [{ json: { ...carry, found: false, next_offset: 0, attempts, timed_out: now >= Number(state.deadline), poll_error } }];\n"
+        "jsCode": "// Look for the user's reply among the getUpdates results. Loop state comes from the last run of `Wait 70s`.\n// Several reviews may be open in the same chat, so:\n//   * a Telegram \"reply to\" (long-press → Reply) is accepted only by the review it quotes;\n//   * a plain message is accepted by whichever review CLAIMS it first at the runner (/claim_reply);\n//   * forwarded messages and pasted review blocks are ignored.\n// We never advance Telegram's offset (always 0), so no review can make a message vanish for another one.\nconst cfg = $('Config').first().json;\nconst state = $('Wait 70s').first().json;\nconst resp = $input.first().json || {};\nconst chatId = String(cfg.TELEGRAM_CHAT_ID);\nconst now = Math.floor(Date.now() / 1000);\n\nconst updates = (resp.ok === true && Array.isArray(resp.result)) ? resp.result : [];\nconst attempts = (Number(state.attempts) || 0) + 1;\nconst poll_error = resp.error ? String(resp.error.message || resp.error) : (resp.ok === false ? String(resp.description || 'getUpdates not ok') : null);\nconst carry = { job_id: state.job_id, review_message_id: state.review_message_id, review_message_ids: state.review_message_ids || null, phase: state.phase || 'pick', ranks: state.ranks || null, sent_at: state.sent_at, deadline: state.deadline };\nconst looksLikeReview = t => /BEST PICK|What happens:|Weak spot:|Clip review —/.test(t);\n\nconst mine = [];\nfor (const u of updates) {\n  const m = u.message;\n  if (!m || !m.chat || String(m.chat.id) !== chatId) continue;\n  if (!(Number(m.date) > Number(state.sent_at))) continue;\n  if (typeof m.text !== 'string' || !m.text.trim()) continue;\n  if (m.forward_origin || m.forward_date || looksLikeReview(m.text)) continue;\n  const quoted = m.reply_to_message && m.reply_to_message.message_id;\n  const myIds = (state.review_message_ids || [state.review_message_id]).map(String);\n  if (quoted && !myIds.includes(String(quoted))) continue;   // addressed to another review\n  mine.push({ u, m, addressed: !!quoted });\n}\nmine.sort((a, b) => Number(a.m.date) - Number(b.m.date));   // oldest first: claim in arrival order\n\nlet best = null;\nfor (const cand of mine) {\n  if (cand.addressed) { best = cand; break; }\n  try {\n    const r = await this.helpers.httpRequest({ method: 'POST', url: cfg.RUNNER_URL + '/claim_reply', json: true,\n      body: { update_id: cand.u.update_id, job_id: state.job_id }, timeout: 10000 });\n    if (r && r.claimed) { best = cand; break; }\n  } catch (e) {\n    // Runner too old for /claim_reply (or down): behave like before the claim existed rather than never answering.\n    if (/unknown route|404|ECONNREFUSED|claim_reply/i.test(String(e && e.message || e))) { best = cand; break; }\n  }\n}\n\nif (best) {\n  return [{ json: { ...carry, found: true, text: best.m.text.trim(), reply_date: best.m.date, update_id: best.u.update_id,\n                    next_offset: 0, attempts, timed_out: false, poll_error: null } }];\n}\nreturn [{ json: { ...carry, found: false, next_offset: 0, attempts, timed_out: now >= Number(state.deadline), poll_error } }];\n"
       },
       "id": "3d2d31f2-aebb-4916-9d51-6efbbcc11bad",
       "name": "Find Reply",
@@ -888,6 +906,24 @@
               "name": "deadline",
               "value": "={{ $('Find Reply').first().json.deadline }}",
               "type": "number"
+            },
+            {
+              "id": "32111be7-7542-49e2-bde0-305142975010",
+              "name": "phase",
+              "value": "={{ $('Find Reply').first().json.phase }}",
+              "type": "string"
+            },
+            {
+              "id": "977ece3a-2bbb-4c4f-b3db-ff791bb6417d",
+              "name": "ranks",
+              "value": "={{ $('Find Reply').first().json.ranks }}",
+              "type": "array"
+            },
+            {
+              "id": "af1a3289-46bb-4f0f-ac16-98b5a961d79f",
+              "name": "review_message_ids",
+              "value": "={{ $('Find Reply').first().json.review_message_ids }}",
+              "type": "array"
             }
           ]
         },
@@ -924,7 +960,7 @@
         "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
-        "text": "={{ '⏱ Personal Clipper — no reply in ' + $('Config').first().json.REVIEW_TIMEOUT_HOURS + ' h for ' + $('Build Review Message').first().json.original + '. Nothing rendered. Working files kept at ' + $('Build Review Message').first().json.job_dir }}",
+        "text": "={{ ($('Wait 70s').first().json.phase === 'post') ? ('⏱ No \"post\"/\"keep\" reply in ' + $('Config').first().json.REVIEW_TIMEOUT_HOURS + ' h — clip(s) kept in ' + $('Config').first().json.READY + ', not posted.') : ('⏱ Personal Clipper — no reply in ' + $('Config').first().json.REVIEW_TIMEOUT_HOURS + ' h for ' + $('Build Review Message').first().json.original + '. Nothing rendered. Working files kept at ' + $('Build Review Message').first().json.job_dir) }}",
         "additionalFields": {
           "appendAttribution": false,
           "parse_mode": "None"
@@ -973,7 +1009,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Implements the CONTRACT.md reply grammar. One output item per pick, so \"1 and 5\" renders both.\nconst review = $('Build Review Message').first().json;\nconst cfg = $('Config').first().json;\nconst raw = String($input.first().json.text || '').trim();   // set by Find Reply\nconst text = raw.toLowerCase().replace(/\\s+/g, ' ');\nconst duration = Number(review.duration_sec) || 0;\n\nconst base = { reply: raw, job_id: review.job_id, job_dir: review.job_dir, input: review.input,\n               original: review.original, candidates: review.candidates };\nconst invalid = (error) => [{ json: { ...base, action: 'invalid', error } }];\n\nif (['reject all', 'no', 'none', 'skip', 'skip all', 'reject'].includes(text)) return [{ json: { ...base, action: 'reject' } }];\n\n// Split into picks: \"1 and 5\", \"1, 5\", \"1 + 5\", \"1 & 5\", \"1 5\". Adjustments stay attached to the pick they follow.\nconst PICK = /^(\\d)(?:\\s*(?:start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?)*$/i;\nconst parts = text.split(/\\s*(?:,|\\band\\b|\\+|&)\\s*|(?<=\\b\\d)\\s+(?=\\d\\b)/).map(s => s.trim()).filter(Boolean);\nif (!parts.length || !parts.every(pt => PICK.test(pt))) return invalid(`Could not parse reply \"${raw}\"`);\n\nconst out = [];\nconst seen = new Set();\nfor (const pt of parts) {\n  const rank = Number(pt.match(/^(\\d)/)[1]);\n  if (seen.has(rank)) continue;\n  seen.add(rank);\n  const cand = (review.candidates || []).find(c => Number(c.rank) === rank);\n  if (!cand) return invalid(`No candidate #${rank}`);\n  let start = Number(cand.start), end = Number(cand.end);\n  const clauseRe = /(start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?/g;\n  let m;\n  while ((m = clauseRe.exec(pt)) !== null) {\n    let delta = parseFloat(m[2]);\n    if (m[3] === 'earlier') delta = -Math.abs(delta);\n    else if (m[3] === 'later') delta = Math.abs(delta);\n    if (m[1] === 'start') start += delta; else end += delta;   // bare signed number: + = later, - = earlier\n  }\n  const clamp = v => Math.min(Math.max(0, v), duration || v);\n  start = clamp(start); end = clamp(end);\n  if (end <= start) return invalid(`#${rank}: window collapsed (start ${start}s ≥ end ${end}s)`);\n  out.push({ json: { ...base, action: 'render', rank, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)),\n                     duration: Number((end - start).toFixed(3)), candidate: { ...cand, start, end },\n                     pick_index: out.length, pick_count: 0,\n                     captions: cfg.CAPTIONS !== false, offset: cfg.RENDER_OFFSET, audio_mode: cfg.AUDIO_MODE, volume: cfg.VOLUME } });\n}\nfor (const o of out) o.json.pick_count = out.length;\nreturn out;\n"
+        "jsCode": "// Implements the CONTRACT.md reply grammar. One output item per pick, so \"1 and 5\" renders both.\nconst review = $('Build Review Message').first().json;\nconst cfg = $('Config').first().json;\nconst raw = String($input.first().json.text || '').trim();   // set by Find Reply\nconst text = raw.toLowerCase().replace(/\\s+/g, ' ');\nconst duration = Number(review.duration_sec) || 0;\n\nconst base = { reply: raw, job_id: review.job_id, job_dir: review.job_dir, input: review.input,\n               original: review.original, candidates: review.candidates };\nconst invalid = (error) => [{ json: { ...base, action: 'invalid', error } }];\n\n// ---- phase 2: clips delivered, waiting for \"post\" / \"keep\"\nconst state = $('Wait 70s').first().json || {};\nif (state.phase === 'post') {\n  const delivered = $('Prepare Clip Message').all().map(it => it.json);\n  if (['keep', 'no', 'skip', 'none', 'dont post', \"don't post\"].includes(text)) {\n    return [{ json: { ...base, action: 'keep', delivered } }];\n  }\n  const m = text.match(/^(?:post|upload|yes|publish)(?:\\s+(all|[\\d\\s,and+&]+))?$/);\n  if (!m) return invalid(`Could not parse \"${raw}\" — in this step the options are \"post\", \"post 2\", \"post all\" or \"keep\"`);\n  let wanted = delivered;\n  if (m[1] && m[1] !== 'all') {\n    const ranks = (m[1].match(/\\d/g) || []).map(Number);\n    wanted = delivered.filter(d => ranks.includes(Number(d.rank)));\n    if (!wanted.length) return invalid(`No delivered clip matches \"${raw}\" (delivered: ${delivered.map(d => '#' + d.rank).join(', ')})`);\n  }\n  return wanted.map((d, i) => ({ json: { ...d, action: 'upload', reply: raw, upload_index: i, upload_count: wanted.length } }));\n}\n\n\nif (['reject all', 'no', 'none', 'skip', 'skip all', 'reject'].includes(text)) return [{ json: { ...base, action: 'reject' } }];\n\n// Split into picks: \"1 and 5\", \"1, 5\", \"1 + 5\", \"1 & 5\", \"1 5\". Adjustments stay attached to the pick they follow.\nconst PICK = /^(\\d)(?:\\s*(?:start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?)*$/i;\nconst parts = text.split(/\\s*(?:,|\\band\\b|\\+|&)\\s*|(?<=\\b\\d)\\s+(?=\\d\\b)/).map(s => s.trim()).filter(Boolean);\nif (!parts.length || !parts.every(pt => PICK.test(pt))) return invalid(`Could not parse reply \"${raw}\"`);\n\nconst out = [];\nconst seen = new Set();\nfor (const pt of parts) {\n  const rank = Number(pt.match(/^(\\d)/)[1]);\n  if (seen.has(rank)) continue;\n  seen.add(rank);\n  const cand = (review.candidates || []).find(c => Number(c.rank) === rank);\n  if (!cand) return invalid(`No candidate #${rank}`);\n  let start = Number(cand.start), end = Number(cand.end);\n  const clauseRe = /(start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?/g;\n  let m;\n  while ((m = clauseRe.exec(pt)) !== null) {\n    let delta = parseFloat(m[2]);\n    if (m[3] === 'earlier') delta = -Math.abs(delta);\n    else if (m[3] === 'later') delta = Math.abs(delta);\n    if (m[1] === 'start') start += delta; else end += delta;   // bare signed number: + = later, - = earlier\n  }\n  const clamp = v => Math.min(Math.max(0, v), duration || v);\n  start = clamp(start); end = clamp(end);\n  if (end <= start) return invalid(`#${rank}: window collapsed (start ${start}s ≥ end ${end}s)`);\n  out.push({ json: { ...base, action: 'render', rank, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)),\n                     duration: Number((end - start).toFixed(3)), candidate: { ...cand, start, end },\n                     pick_index: out.length, pick_count: 0,\n                     captions: cfg.CAPTIONS !== false, offset: cfg.RENDER_OFFSET, audio_mode: cfg.AUDIO_MODE, volume: cfg.VOLUME } });\n}\nfor (const o of out) o.json.pick_count = out.length;\nreturn out;\n"
       },
       "id": "c703caca-6695-460f-953e-7a46dcc41c30",
       "name": "Parse Reply",
@@ -1059,6 +1095,54 @@
               },
               "renameOutput": true,
               "outputKey": "invalid"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8508ec76-4ac0-45e7-8638-f37d1144e5ad",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "upload",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "upload"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "10e66aa3-fb4a-4a3b-9360-5617214e739e",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "keep",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "keep"
             }
           ]
         },
@@ -1206,36 +1290,11 @@
     },
     {
       "parameters": {
-        "resource": "message",
-        "operation": "sendMessage",
-        "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
-        "text": "={{ '✅ Rendered ' + $json.original + ' → clip #' + $json.rank + ($json.pick_count > 1 ? ' (' + ($json.pick_index + 1) + ' of ' + $json.pick_count + ')' : '') + '\\n' + 'Output: ' + $json.render.output + '\\n' + 'Score: ' + ($json.candidate.predict ? $json.candidate.predict.total : '?') + '/100   ' + $json.start + 's → ' + $json.end + 's (' + $json.duration + 's)\\n' + 'Encoder: ' + $json.render.encoder + '\\n' + 'CapCut package: ' + $json.package.package_dir }}",
-        "additionalFields": {
-          "appendAttribution": false,
-          "parse_mode": "None"
-        }
-      },
-      "id": "c1c601f3-56d6-4551-9a78-e3f2de53965d",
-      "name": "Telegram: Delivered",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        6600,
-        120
-      ],
-      "credentials": {
-        "telegramApi": {
-          "name": "Personal Clipper Bot"
-        }
-      }
-    },
-    {
-      "parameters": {
         "method": "POST",
         "url": "={{ $('Config').first().json.RUNNER_URL }}/log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ (() => { const p = $('Attach Package').all()[$itemIndex].json; return { job_id: p.job_id, input: p.input, candidates: p.candidates, approved: { rank: p.rank, start: p.start, end: p.end, reply: p.reply, pick_index: p.pick_index, pick_count: p.pick_count }, output: p.render.output, package_dir: p.package.package_dir, status: 'delivered' }; })() }}",
+        "jsonBody": "={{ $json }}",
         "options": {
           "timeout": 120000,
           "response": {
@@ -1250,8 +1309,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        6900,
-        120
+        6800,
+        720
       ],
       "onError": "stopWorkflow"
     },
@@ -1262,8 +1321,8 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        7200,
-        120
+        7000,
+        720
       ]
     },
     {
@@ -1313,6 +1372,223 @@
       "position": [
         0,
         -260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map the preview file to its path inside the n8n container and write the Telegram caption.\nconst cfg = $('Config').first().json;\nconst out = [];\nfor (const it of $input.all()) {\n  const j = it.json;\n  const pkg = j.package || {};\n  const win = pkg.preview || j.render.output;\n  const root = String(cfg.CLIPS_ROOT || '').replace(/\\\\+$/, '');\n  let cpath = null;\n  if (root && win.toLowerCase().startsWith(root.toLowerCase())) {\n    cpath = (cfg.CONTAINER_CLIPS || '/data/clips') + win.slice(root.length).replace(/\\\\/g, '/');\n  }\n  const p = j.candidate.predict || {};\n  const mmss = s => { s = Math.max(0, Math.round(Number(s) || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };\n  const n = j.pick_count > 1 ? ` (${j.pick_index + 1} of ${j.pick_count})` : '';\n  const caption =\n    `🎬 Clip #${j.rank} ready${n} — ${j.original}\\n` +\n    `${mmss(j.start)} → ${mmss(j.end)} (${Math.round(j.duration)} s) · score ${p.total ?? '?'}/100 · ${j.render.encoder || 'encoded'}` +\n    (p.notes && p.notes.visual && p.notes.visual.penalty ? `\\n⚠️ ${p.notes.visual.penalty}` : '') +\n    `\\nSaved: ${j.render.output}\\nCapCut package: ${pkg.package_dir || '-'}` +\n    `\\n\\n👉 Reply \"post\" to upload it to YouTube Shorts (${cfg.POST_PRIVACY || 'public'})` +\n    (j.pick_count > 1 ? `, \"post ${j.rank}\" for just this one, \"post all\" for all ${j.pick_count}` : '') +\n    `, or \"keep\" to leave it in Ready. Long-press → Reply if several are open.`;\n  out.push({ json: { ...j, preview_container_path: cpath, preview_windows_path: win, caption } });\n}\nreturn out;\n"
+      },
+      "id": "e09476fb-6e8d-41f9-91fc-f4264740a675",
+      "name": "Prepare Clip Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6600,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.preview_container_path }}",
+        "options": {}
+      },
+      "id": "bebbdf6c-ebaa-4499-b701-ec6f4f610a6e",
+      "name": "Read Preview",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        6790,
+        280
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendVideo",
+        "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "caption": "={{ $('Prepare Clip Message').all()[$itemIndex].json.caption }}",
+          "parse_mode": "None",
+          "supports_streaming": true
+        }
+      },
+      "id": "718d0464-18e7-4b3b-ac32-ccace5204ebb",
+      "name": "Telegram: Send Clip",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        6980,
+        280
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Second review phase: the clips were delivered; now wait for \"post\" / \"keep\" (same poll loop, phase = post).\nconst cfg = $('Config').first().json;\nconst picks = $('Confirm Delivery').all().map(it => it.json);\nconst sentMsgs = picks.map(p => p.delivery_message_id).filter(Boolean);\nconst sent_at = Math.floor(Date.now() / 1000);\nconst hours = Number(cfg.REVIEW_TIMEOUT_HOURS) || 24;\nreturn [{ json: {\n  phase: 'post',\n  job_id: picks[0].job_id,\n  review_message_id: sentMsgs[sentMsgs.length - 1] || null,\n  review_message_ids: sentMsgs,\n  ranks: picks.map(p => p.rank),\n  sent_at, deadline: sent_at + hours * 3600, poll_offset: 0, attempts: 0,\n} }];\n"
+      },
+      "id": "8ac177bf-4621-4333-9e33-73bb5242d669",
+      "name": "Init Post Poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7550,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.RUNNER_URL }}/upload",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $json.job_id, output: $json.render.output, rank: $json.rank, candidate: $json.candidate, privacy: $('Config').first().json.POST_PRIVACY || 'public', game: $('Config').first().json.GAME || '' } }}",
+        "options": {
+          "timeout": 1000000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "73c6c7d5-97b4-4ea6-8755-ebe854ddb9a7",
+      "name": "Upload to YouTube",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6000,
+        640
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pair upload results with their clip (same order).\nconst picks = $('Parse Reply').all();\nreturn $input.all().map((it, i) => ({ json: { ...picks[i].json, upload: it.json } }));\n"
+      },
+      "id": "0b3f6613-f685-4720-ae44-b1230548efcd",
+      "name": "Attach Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6200,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.upload && $json.upload.url ? ('🚀 Posted clip #' + $json.rank + ' to YouTube Shorts (' + ($json.upload.privacy || 'public') + ')\\n' + $json.upload.title + '\\n' + $json.upload.url + '\\n\\nOpen it to review; change privacy in YouTube Studio if needed.') : ('❌ Upload of clip #' + $json.rank + ' failed: ' + ($json.upload && ($json.upload.error || ($json.upload.message)) ? String($json.upload.error || $json.upload.message).slice(0, 300) : 'unknown error') + '\\nThe clip is still in Ready: ' + $json.render.output) }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "None"
+        }
+      },
+      "id": "03a803fd-a50a-4038-8e1f-d9c74ad061fb",
+      "name": "Telegram: Posted",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        6400,
+        640
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ '📁 Kept, not posted. Clip(s) stay in ' + $('Config').first().json.READY + ' with their CapCut packages.' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "None"
+        }
+      },
+      "id": "60ab64c5-5756-42b4-bef0-b6445fd37798",
+      "name": "Telegram: Kept",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        6000,
+        820
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// One log record per delivered clip, with the YouTube link when it was posted.\nconst delivered = $('Prepare Clip Message').all().map(it => it.json);\nlet uploads = [];\ntry { uploads = $('Attach Upload').all().map(it => it.json); } catch (e) { uploads = []; }\nconst byRank = {}; for (const u of uploads) byRank[u.rank] = u.upload || {};\nreturn delivered.map(d => ({ json: {\n  job_id: d.job_id, input: d.input, candidates: d.candidates,\n  approved: { rank: d.rank, start: d.start, end: d.end, reply: d.reply, pick_index: d.pick_index, pick_count: d.pick_count },\n  output: d.render.output, package_dir: (d.package || {}).package_dir,\n  posted: byRank[d.rank] && byRank[d.rank].url ? { url: byRank[d.rank].url, video_id: byRank[d.rank].video_id, privacy: byRank[d.rank].privacy, title: byRank[d.rank].title } : null,\n  status: byRank[d.rank] && byRank[d.rank].url ? 'posted' : 'delivered',\n} }));\n"
+      },
+      "id": "55e9a2d4-54b2-453a-be26-fc5a40a14389",
+      "name": "Build Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6600,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6b3fc24f-45aa-4154-8a75-aaf0b7225535",
+              "leftValue": "={{ $('Wait 70s').first().json.phase }}",
+              "rightValue": "post",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c176cc8e-e20c-45e9-8d5a-9935fb564ec6",
+      "name": "Post Phase?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5600,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per delivered clip. If the video message went out, keep its message_id; if Telegram refused the\n// file (too big / unreadable), send the caption as a text message instead so the delivery is never silent.\nconst cfg = $('Config').first().json;\nconst prepared = $('Prepare Clip Message').all().map(it => it.json);\nconst out = [];\nconst items = $input.all();\nfor (let i = 0; i < prepared.length; i++) {\n  const sent = (items[i] && items[i].json) || {};\n  const r = sent.result || sent;\n  let msgId = r && r.message_id ? r.message_id : null;\n  let note = null;\n  if (!msgId) {\n    note = sent.error ? String(sent.error.message || sent.error).slice(0, 160) : 'preview could not be attached';\n    try {\n      const resp = await this.helpers.httpRequest({ method: 'POST', json: true, timeout: 20000,\n        url: 'https://api.telegram.org/bot' + cfg.TELEGRAM_BOT_TOKEN + '/sendMessage',\n        body: { chat_id: cfg.TELEGRAM_CHAT_ID, text: '✅ ' + prepared[i].caption + '\\n(video preview not attached: ' + note + ')' } });\n      msgId = resp && resp.result ? resp.result.message_id : null;\n    } catch (e) { note += ' | text fallback failed: ' + String(e.message || e).slice(0, 120); }\n  }\n  out.push({ json: { ...prepared[i], delivery_message_id: msgId, delivery_note: note } });\n}\nreturn out;\n"
+      },
+      "id": "dbb12626-f0a4-43b8-99cd-9610fc373b4e",
+      "name": "Confirm Delivery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7170,
+        280
       ]
     }
   ],
@@ -1616,7 +1892,7 @@
       "main": [
         [
           {
-            "node": "Timed out — nothing rendered",
+            "node": "Post Phase?",
             "type": "main",
             "index": 0
           }
@@ -1653,6 +1929,20 @@
         [
           {
             "node": "Telegram: Bad Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upload to YouTube",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: Kept",
             "type": "main",
             "index": 0
           }
@@ -1703,17 +1993,6 @@
         ]
       ]
     },
-    "Telegram: Delivered": {
-      "main": [
-        [
-          {
-            "node": "Log",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Log": {
       "main": [
         [
@@ -1740,7 +2019,7 @@
       "main": [
         [
           {
-            "node": "Telegram: Delivered",
+            "node": "Prepare Clip Message",
             "type": "main",
             "index": 0
           }
@@ -1752,6 +2031,134 @@
         [
           {
             "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Clip Message": {
+      "main": [
+        [
+          {
+            "node": "Read Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Preview": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Send Clip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Send Clip": {
+      "main": [
+        [
+          {
+            "node": "Confirm Delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Post Poll": {
+      "main": [
+        [
+          {
+            "node": "Wait 70s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to YouTube": {
+      "main": [
+        [
+          {
+            "node": "Attach Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Upload": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Posted": {
+      "main": [
+        [
+          {
+            "node": "Build Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Kept": {
+      "main": [
+        [
+          {
+            "node": "Build Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Log": {
+      "main": [
+        [
+          {
+            "node": "Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Phase?": {
+      "main": [
+        [
+          {
+            "node": "Build Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Timed out — nothing rendered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Delivery": {
+      "main": [
+        [
+          {
+            "node": "Init Post Poll",
             "type": "main",
             "index": 0
           }
