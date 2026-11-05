@@ -365,6 +365,38 @@ class Stages:
                                        output=body.get("output"), status=body.get("status"))
         return {"hash": digest}
 
+    # ---------------------------------------------------------------- POST /claim_reply
+    _claim_lock = __import__("threading").Lock()
+
+    def claim_reply(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """First-come claim of one Telegram update for one review job.
+
+        Several reviews can be waiting in the same chat; every poll loop sees every message. A message that
+        is not a Telegram reply-to a specific review is given to whichever job claims it first; the others
+        are told ``claimed: false`` and ignore it. Claims live in ``<LEDGER dir>/reply_claims.json``, pruned
+        after 48 h. Idempotent for the owner (re-claiming your own update returns ``claimed: true``).
+        """
+        update_id = str(body.get("update_id", "")).strip()
+        job_id = str(body.get("job_id", "")).strip()
+        if not update_id or not job_id:
+            raise StageError("claim_reply", "update_id and job_id are required", None)
+        path = self.cfg.LEDGER.parent / "reply_claims.json"
+        now = time.time()
+        with self._claim_lock:
+            try:
+                claims = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+            except (OSError, ValueError):
+                claims = {}
+            claims = {k: v for k, v in claims.items() if now - float(v.get("at", 0)) < 48 * 3600}
+            owner = claims.get(update_id, {}).get("job_id")
+            if owner is None:
+                claims[update_id] = {"job_id": job_id, "at": now}
+                owner = job_id
+                tmp = path.with_suffix(".tmp")
+                tmp.write_text(json.dumps(claims, indent=1), encoding="utf-8")
+                os.replace(tmp, path)
+        return {"claimed": owner == job_id, "owner": owner}
+
 
 def _encoder_from_output_file(path: Path) -> Optional[str]:
     """Reads the real encoder id from the rendered file's video stream tag (e.g. 'Lavc60 h264_nvenc').
@@ -413,6 +445,7 @@ def make_handler(stages: Stages) -> type:
         "/guard": stages.guard, "/ingest": stages.ingest, "/transcribe": stages.transcribe,
         "/score": stages.score, "/predict": stages.predict, "/ollama_verdict": stages.ollama_verdict,
         "/render": stages.render, "/package": stages.package, "/log": stages.log,
+        "/claim_reply": stages.claim_reply,
     }
 
     class Handler(BaseHTTPRequestHandler):

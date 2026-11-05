@@ -84,4 +84,6 @@ Stage 7. Appends one JSON line to RUN_LOG and marks the hash processed in LEDGER
 #2 ...
 Reply: a number (e.g. 2), several ("1 and 5" renders both), "2 start 5s earlier", "2 end 3s later", "no" (or "reject all"). No reply in 24 h = nothing rendered.
 ```
+`POST /claim_reply {update_id, job_id}` → `{claimed: bool, owner}` — first-come claim of a Telegram update so concurrent reviews never act on the same message (claims in `reply_claims.json`, 48 h). A Telegram reply-to (quote) of a review is accepted only by that review and needs no claim. n8n polls getUpdates with offset 0 (never confirms) so one review cannot hide a message from another.
+
 Reply grammar parsed by n8n: `^(\d)(?:\s*(?:start|end)\s*([+-]?\d+(?:\.\d+)?)\s*s?\s*(earlier|later)?)*$|^(?:reject all|no|none|skip|skip all|reject)$` (case-insensitive).
