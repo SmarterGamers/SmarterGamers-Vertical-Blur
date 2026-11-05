@@ -30,6 +30,7 @@ STATIC_DIFF = 1.5              # mean abs diff on the 9x8 thumbnail
 UI_SAT_MAX = 0.35
 UI_FLAT_MIN = 0.18
 UI_LUMA_MAX = 85
+UI_MOTION_MAX = 4.0            # a UI frame must also be near-motionless (dark gameplay moves; menus don't)
 TAIL_SEC = 10.0                # "ends on a menu" looks at the last 10 s
 TAIL_BAD_FRACTION = 0.6        # ...and calls it bad when >= 60 % of those frames are bad
 BAD_WINDOW_FRACTION = 0.4      # whole window is bad when >= 40 % of frames are bad
@@ -131,11 +132,13 @@ def window_visual_stats(source: Path, start: float, end: float, source_w: int = 
             labels.append("black"); counts["black"] += 1; prev = None
             continue
         label = "ok"
+        motion = sum(abs(x - y) for x, y in zip(a["thumb"], prev)) / 72.0 if prev is not None else None
         if refs and any((a["dhash"] ^ ref).bit_count() <= MAX_HAMMING for ref in refs):
             label = "menu"
-        elif a["sat"] <= UI_SAT_MAX and a["flat"] >= UI_FLAT_MIN and a["med_luma"] <= UI_LUMA_MAX:
+        elif (a["sat"] <= UI_SAT_MAX and a["flat"] >= UI_FLAT_MIN and a["med_luma"] <= UI_LUMA_MAX
+              and (motion is None or motion < UI_MOTION_MAX)):
             label = "ui"
-        elif prev is not None and sum(abs(x - y) for x, y in zip(a["thumb"], prev)) / 72.0 < STATIC_DIFF:
+        elif motion is not None and motion < STATIC_DIFF:
             label = "static"
         if label != "ok":
             counts[label] += 1
