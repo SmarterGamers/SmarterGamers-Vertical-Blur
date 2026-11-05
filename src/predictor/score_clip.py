@@ -267,10 +267,14 @@ def biggest_fix(hook: int, retention: int, clarity: int, length_fit: int,
 
 def predict_candidate(words: Sequence[Dict[str, Any]], rms: Sequence[float], start: float, end: float,
                       hop_s: float = 0.1, target_len: float = 30.0, source_w: int = 1920,
-                      source_h: int = 1080, signals: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                      source_h: int = 1080, signals: Optional[Dict[str, Any]] = None,
+                      visual: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Full prediction for one window. Pure.
 
     ``signals``: ``{"onset_times": [abs seconds of non-speech action onsets], "firefight_peak_abs": s|None}``.
+    ``visual``: output of :func:`clipper.visual.window_visual_stats` (menu/static/UI frame ratios). When the
+    window *ends* on a menu or static screen the retention score drops and the fix says where to cut; when
+    most of the window is menu/static the clip is capped well below the recommendation floor.
     """
     duration = max(0.0, end - start)
     rel_words = clip_words(words, start, end)
@@ -285,18 +289,38 @@ def predict_candidate(words: Sequence[Dict[str, Any]], rms: Sequence[float], sta
     retention, lulls, rn = score_retention(rel_words, rel_rms, duration, hop_s, action_onsets=rel_onsets)
     clarity, cn = score_clarity(rel_words, rel_rms, hop_s, source_w, source_h)
     length_fit, ln = score_length(duration, target_len)
+    fix = biggest_fix(hook, retention, clarity, length_fit, lulls, hn, rn, cn, rel_words, duration)
+    vn: Dict[str, Any] = {}
+    vis = visual or {}
+    if vis.get("frames"):
+        vn = {k: vis.get(k) for k in ("bad_ratio", "menu_ratio", "static_ratio", "ui_ratio", "black_ratio",
+                                      "tail_bad", "bad_from_sec", "window_bad", "tail_is_bad")}
+        if vis.get("window_bad"):
+            retention = min(retention, 5)
+            vn["penalty"] = "mostly menu/static screen"
+            fix = f"{int(round(100 * vis['bad_ratio']))}% of this window is a menu/static screen — not worth clipping"
+        elif vis.get("tail_is_bad"):
+            retention = max(0, retention - 10)
+            cut_at = vis.get("bad_from_sec")
+            vn["penalty"] = "ends on menu/static screen"
+            if cut_at is not None and cut_at >= 12:
+                trim = duration - cut_at
+                fix = f"ends on a menu/static screen from {_fmt(cut_at)} — cut it there (reply 'N end {trim:.0f}s earlier')"
+            else:
+                fix = "ends on a menu/static screen — pick a window that finishes on the action"
     total = hook + retention + clarity + length_fit
     return {
         "total": int(total), "hook": hook, "retention": retention, "clarity": clarity,
         "length_fit": length_fit, "lulls": lulls,
-        "biggest_fix": biggest_fix(hook, retention, clarity, length_fit, lulls, hn, rn, cn, rel_words, duration),
-        "notes": {"hook": hn, "retention": rn, "clarity": cn, "length": ln},
+        "biggest_fix": fix,
+        "notes": {"hook": hn, "retention": rn, "clarity": cn, "length": ln, "visual": vn},
     }
 
 
 def predict_all(candidates: Sequence[Dict[str, Any]], words: Sequence[Dict[str, Any]], rms: Sequence[float],
                 hop_s: float = 0.1, target_len: float = 30.0, source_w: int = 1920,
-                source_h: int = 1080) -> Tuple[List[Dict[str, Any]], Optional[int]]:
+                source_h: int = 1080, visuals: Optional[Sequence[Optional[Dict[str, Any]]]] = None
+                ) -> Tuple[List[Dict[str, Any]], Optional[int]]:
     """Adds ``predict`` to each candidate (copied) and returns (candidates, recommended_rank).
 
     ``recommended_rank`` is ``None`` unless some candidate is both a ``strong_moment`` (real game
@@ -305,15 +329,19 @@ def predict_all(candidates: Sequence[Dict[str, Any]], words: Sequence[Dict[str, 
     """
     out: List[Dict[str, Any]] = []
     best_rank, best_total = None, -1
-    for c in candidates:
+    for i, c in enumerate(candidates):
         cc = dict(c)
         csig = c.get("signals") or {}
+        vis = (visuals[i] if visuals and i < len(visuals) else None) or {}
         cc["predict"] = predict_candidate(words, rms, float(c["start"]), float(c["end"]),
                                           hop_s, target_len, source_w, source_h,
                                           signals={"onset_times": csig.get("onset_times") or [],
-                                                   "firefight_peak_abs": csig.get("firefight_peak_abs")})
+                                                   "firefight_peak_abs": csig.get("firefight_peak_abs")},
+                                          visual=vis)
         if not cc.get("strong_moment", True):
             cc["predict"]["biggest_fix"] = "no game action in this window — not worth clipping as a highlight"
+        if vis.get("window_bad"):
+            cc["strong_moment"] = False      # a menu with gunfire audio behind it is still a menu
         out.append(cc)
         eligible = cc.get("strong_moment", True) and cc["predict"]["total"] >= MIN_RECOMMEND_TOTAL
         if eligible and cc["predict"]["total"] > best_total:

@@ -142,12 +142,32 @@ def test_gameplay_open_is_a_hook_and_gunfire_is_not_dead_air():
     print(f"[OK] gameplay open: hook {without['hook']} -> {with_action['hook']}, retention {without['retention']} -> {with_action['retention']}")
 
 
+def test_visual_dead_time_penalty():
+    """A window that ends on a menu loses retention and says where to cut; a mostly-menu window is capped."""
+    words = words_from("we push the point and wipe the squad right now")
+    rms = flat_rms(30, 0.3)
+    base = sc.predict_candidate(words, rms, 0, 30)
+    tail = sc.predict_candidate(words, rms, 0, 30, visual={"frames": 30, "tail_is_bad": True, "bad_from_sec": 16.0,
+                                                           "bad_ratio": 0.45, "window_bad": False})
+    assert tail["total"] <= base["total"] - 10 and "0:16" in tail["biggest_fix"] and "end 14s earlier" in tail["biggest_fix"]
+    bad = sc.predict_candidate(words, rms, 0, 30, visual={"frames": 30, "tail_is_bad": True, "bad_from_sec": 1.0,
+                                                          "bad_ratio": 0.9, "window_bad": True})
+    assert bad["retention"] <= 5 and "not worth clipping" in bad["biggest_fix"]
+    # predict_all: a window_bad candidate is never recommended even with a strong_moment flag
+    cands = [{"rank": 1, "start": 0, "end": 30, "strong_moment": True, "signals": {}}]
+    out, rec = sc.predict_all(cands, words, rms, visuals=[{"frames": 30, "window_bad": True, "tail_is_bad": True,
+                                                            "bad_ratio": 0.9, "bad_from_sec": 0.0}])
+    assert rec is None and out[0]["strong_moment"] is False
+    print("[OK] visual dead-time: tail menu -10 retention + cut hint; mostly-menu window never recommended")
+
+
 if __name__ == "__main__":
     test_hook_prefers_reaction_over_generic_intro()
     test_hook_penalises_silent_open()
     test_retention_dead_air_reports_lull()
     test_retention_fillers()
     test_clarity_and_length()
+    test_visual_dead_time_penalty()
     test_predict_all_recommends_and_biggest_fix()
     print("\nALL PREDICTOR TESTS PASSED SUCCESSFULLY!")
     test_gameplay_open_is_a_hook_and_gunfire_is_not_dead_air()

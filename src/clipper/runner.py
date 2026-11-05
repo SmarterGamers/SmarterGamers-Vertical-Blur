@@ -43,6 +43,7 @@ from clipper import captions as captions_mod  # noqa: E402
 from clipper import capcut_package  # noqa: E402
 from clipper import score_moments  # noqa: E402
 from clipper import transcribe as transcribe_mod  # noqa: E402
+from clipper import visual  # noqa: E402
 from clipper.config import ClipperConfig, load_config  # noqa: E402
 from clipper.ledger import Ledger, append_run_log, file_hash  # noqa: E402
 from clipper.llm import OllamaError, verdict_for_candidate  # noqa: E402
@@ -231,9 +232,19 @@ class Stages:
         except Exception as exc:
             raise StageError("predict", f"audio analysis failed: {exc}", None)
         target_len = float(body.get("target_len") or self.cfg.TARGET_LEN_SEC)
+        sw, sh = int(meta.get("width") or 1920), int(meta.get("height") or 1080)
+        # Visual dead-time check per window (menus / deploy maps / static screens the audio can't see).
+        refs = visual.load_menu_refs(self.cfg.MENU_REFS)
+        visuals = []
+        for c in cands:
+            try:
+                visuals.append(visual.window_visual_stats(Path(meta["source"]), float(c["start"]), float(c["end"]),
+                                                          sw, sh, refs=refs))
+            except Exception:
+                visuals.append(None)
         out, rec = score_clip.predict_all(
             cands, words, sig["rms"], hop_s=sig.get("hop_s", 0.1), target_len=target_len,
-            source_w=int(meta.get("width") or 1920), source_h=int(meta.get("height") or 1080),
+            source_w=sw, source_h=sh, visuals=visuals,
         )
         (job_dir / "candidates.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
         return {"candidates": out, "recommended": rec}
