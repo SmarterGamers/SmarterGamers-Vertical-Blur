@@ -937,7 +937,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Implements the CONTRACT.md reply grammar.\nconst review = $('Build Review Message').first().json;\nconst cfg = $('Config').first().json;\nconst raw = String($input.first().json.text || '').trim();   // set by Find Reply\nconst text = raw.toLowerCase().replace(/\\s+/g, ' ');\nconst duration = Number(review.duration_sec) || 0;\n\nconst GRAMMAR = /^(\\d)(?:\\s*(?:start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?)*$|^(?:reject all|no|none|skip|skip all|reject)$/i;\n\nconst base = { reply: raw, job_id: review.job_id, job_dir: review.job_dir, input: review.input,\n               original: review.original, candidates: review.candidates };\n\nif (['reject all','no','none','skip','skip all','reject'].includes(text)) return [{ json: { ...base, action: 'reject' } }];\nif (!GRAMMAR.test(text)) return [{ json: { ...base, action: 'invalid', error: `Could not parse reply \"${raw}\"` } }];\n\nconst rank = Number(text.match(/^(\\d)/)[1]);\nconst cand = (review.candidates || []).find(c => Number(c.rank) === rank);\nif (!cand) return [{ json: { ...base, action: 'invalid', error: `No candidate #${rank}` } }];\n\nlet start = Number(cand.start), end = Number(cand.end);\nconst clauseRe = /(start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?/g;\nlet m;\nwhile ((m = clauseRe.exec(text)) !== null) {\n  const which = m[1];\n  let delta = parseFloat(m[2]);\n  const dir = m[3];\n  if (dir === 'earlier') delta = -Math.abs(delta);\n  else if (dir === 'later') delta = Math.abs(delta);\n  // no direction word: signed number is taken literally (+ = later, - = earlier)\n  if (which === 'start') start += delta; else end += delta;\n}\nconst clamp = v => Math.min(Math.max(0, v), duration || v);\nstart = clamp(start); end = clamp(end);\nif (end <= start) return [{ json: { ...base, action: 'invalid', error: `Window collapsed (start ${start}s ≥ end ${end}s)` } }];\n\nreturn [{ json: { ...base, action: 'render', rank, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)),\n                  duration: Number((end - start).toFixed(3)), candidate: { ...cand, start, end },\n                  captions: cfg.CAPTIONS !== false, offset: cfg.RENDER_OFFSET, audio_mode: cfg.AUDIO_MODE, volume: cfg.VOLUME } }];\n"
+        "jsCode": "// Implements the CONTRACT.md reply grammar. One output item per pick, so \"1 and 5\" renders both.\nconst review = $('Build Review Message').first().json;\nconst cfg = $('Config').first().json;\nconst raw = String($input.first().json.text || '').trim();   // set by Find Reply\nconst text = raw.toLowerCase().replace(/\\s+/g, ' ');\nconst duration = Number(review.duration_sec) || 0;\n\nconst base = { reply: raw, job_id: review.job_id, job_dir: review.job_dir, input: review.input,\n               original: review.original, candidates: review.candidates };\nconst invalid = (error) => [{ json: { ...base, action: 'invalid', error } }];\n\nif (['reject all', 'no', 'none', 'skip', 'skip all', 'reject'].includes(text)) return [{ json: { ...base, action: 'reject' } }];\n\n// Split into picks: \"1 and 5\", \"1, 5\", \"1 + 5\", \"1 & 5\", \"1 5\". Adjustments stay attached to the pick they follow.\nconst PICK = /^(\\d)(?:\\s*(?:start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?)*$/i;\nconst parts = text.split(/\\s*(?:,|\\band\\b|\\+|&)\\s*|(?<=\\b\\d)\\s+(?=\\d\\b)/).map(s => s.trim()).filter(Boolean);\nif (!parts.length || !parts.every(pt => PICK.test(pt))) return invalid(`Could not parse reply \"${raw}\"`);\n\nconst out = [];\nconst seen = new Set();\nfor (const pt of parts) {\n  const rank = Number(pt.match(/^(\\d)/)[1]);\n  if (seen.has(rank)) continue;\n  seen.add(rank);\n  const cand = (review.candidates || []).find(c => Number(c.rank) === rank);\n  if (!cand) return invalid(`No candidate #${rank}`);\n  let start = Number(cand.start), end = Number(cand.end);\n  const clauseRe = /(start|end)\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*s?\\s*(earlier|later)?/g;\n  let m;\n  while ((m = clauseRe.exec(pt)) !== null) {\n    let delta = parseFloat(m[2]);\n    if (m[3] === 'earlier') delta = -Math.abs(delta);\n    else if (m[3] === 'later') delta = Math.abs(delta);\n    if (m[1] === 'start') start += delta; else end += delta;   // bare signed number: + = later, - = earlier\n  }\n  const clamp = v => Math.min(Math.max(0, v), duration || v);\n  start = clamp(start); end = clamp(end);\n  if (end <= start) return invalid(`#${rank}: window collapsed (start ${start}s ≥ end ${end}s)`);\n  out.push({ json: { ...base, action: 'render', rank, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)),\n                     duration: Number((end - start).toFixed(3)), candidate: { ...cand, start, end },\n                     pick_index: out.length, pick_count: 0,\n                     captions: cfg.CAPTIONS !== false, offset: cfg.RENDER_OFFSET, audio_mode: cfg.AUDIO_MODE, volume: cfg.VOLUME } });\n}\nfor (const o of out) o.json.pick_count = out.length;\nreturn out;\n"
       },
       "id": "c703caca-6695-460f-953e-7a46dcc41c30",
       "name": "Parse Reply",
@@ -1080,7 +1080,7 @@
         "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
-        "text": "={{ '❓ ' + $json.error + '. Nothing rendered, working files kept at ' + $json.job_dir + '. Reply formats: a number, \"2 start 5s earlier\", \"2 end 3s later\", or \"reject all\".' }}",
+        "text": "={{ '❓ ' + $json.error + '. Nothing rendered, working files kept at ' + $json.job_dir + '. Reply formats: a number (5), two numbers (1 and 5), \"2 start 5s earlier\", \"2 end 3s later\", or \"no\".' }}",
         "additionalFields": {
           "appendAttribution": false,
           "parse_mode": "None"
@@ -1159,7 +1159,7 @@
         "url": "={{ $('Config').first().json.RUNNER_URL }}/package",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { job_id: $('Parse Reply').first().json.job_id, rank: $('Parse Reply').first().json.rank, output: $json.output, candidate: $('Parse Reply').first().json.candidate, game: $('Config').first().json.GAME || '' } }}",
+        "jsonBody": "={{ { job_id: $json.job_id, rank: $json.rank, output: $json.render.output, candidate: $json.candidate, game: $('Config').first().json.GAME || '' } }}",
         "options": {
           "timeout": 600000,
           "response": {
@@ -1184,7 +1184,7 @@
         "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
-        "text": "={{ '✅ Rendered ' + $('Parse Reply').first().json.original + ' → clip #' + $('Parse Reply').first().json.rank + '\\n' + 'Output: ' + $('Render').first().json.output + '\\n' + 'Score: ' + ($('Parse Reply').first().json.candidate.predict ? $('Parse Reply').first().json.candidate.predict.total : '?') + '/100   ' + $('Parse Reply').first().json.start + 's → ' + $('Parse Reply').first().json.end + 's (' + $('Parse Reply').first().json.duration + 's)\\n' + 'Encoder: ' + $('Render').first().json.encoder + '\\n' + 'CapCut package: ' + $json.package_dir }}",
+        "text": "={{ '✅ Rendered ' + $json.original + ' → clip #' + $json.rank + ($json.pick_count > 1 ? ' (' + ($json.pick_index + 1) + ' of ' + $json.pick_count + ')' : '') + '\\n' + 'Output: ' + $json.render.output + '\\n' + 'Score: ' + ($json.candidate.predict ? $json.candidate.predict.total : '?') + '/100   ' + $json.start + 's → ' + $json.end + 's (' + $json.duration + 's)\\n' + 'Encoder: ' + $json.render.encoder + '\\n' + 'CapCut package: ' + $json.package.package_dir }}",
         "additionalFields": {
           "appendAttribution": false,
           "parse_mode": "None"
@@ -1210,7 +1210,7 @@
         "url": "={{ $('Config').first().json.RUNNER_URL }}/log",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { job_id: $('Parse Reply').first().json.job_id, input: $('Parse Reply').first().json.input, candidates: $('Parse Reply').first().json.candidates, approved: { rank: $('Parse Reply').first().json.rank, start: $('Parse Reply').first().json.start, end: $('Parse Reply').first().json.end, reply: $('Parse Reply').first().json.reply }, output: $('Render').first().json.output, package_dir: $('Package').first().json.package_dir, status: 'delivered' } }}",
+        "jsonBody": "={{ (() => { const p = $('Attach Package').all()[$itemIndex].json; return { job_id: p.job_id, input: p.input, candidates: p.candidates, approved: { rank: p.rank, start: p.start, end: p.end, reply: p.reply, pick_index: p.pick_index, pick_count: p.pick_count }, output: p.render.output, package_dir: p.package.package_dir, status: 'delivered' }; })() }}",
         "options": {
           "timeout": 120000,
           "response": {
@@ -1239,6 +1239,32 @@
       "position": [
         7200,
         120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pair each Render result with the pick that produced it (same order; n8n runs Render once per pick).\nconst picks = $('Parse Reply').all();\nreturn $input.all().map((it, i) => ({ json: { ...picks[i].json, render: it.json } }));\n"
+      },
+      "id": "0580d4e1-f444-4d81-8072-98f40b128d39",
+      "name": "Attach Pick",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6110,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pair each Package result with its pick + render result.\nconst picks = $('Attach Pick').all();\nreturn $input.all().map((it, i) => ({ json: { ...picks[i].json, package: it.json } }));\n"
+      },
+      "id": "a6c13399-011b-431d-a74f-bbf77af035da",
+      "name": "Attach Package",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6410,
+        280
       ]
     }
   ],
@@ -1611,7 +1637,7 @@
       "main": [
         [
           {
-            "node": "Package",
+            "node": "Attach Pick",
             "type": "main",
             "index": 0
           }
@@ -1622,7 +1648,7 @@
       "main": [
         [
           {
-            "node": "Telegram: Delivered",
+            "node": "Attach Package",
             "type": "main",
             "index": 0
           }
@@ -1645,6 +1671,28 @@
         [
           {
             "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Pick": {
+      "main": [
+        [
+          {
+            "node": "Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Package": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Delivered",
             "type": "main",
             "index": 0
           }
