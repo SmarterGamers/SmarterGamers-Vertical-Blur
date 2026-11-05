@@ -251,16 +251,20 @@ class Stages:
 
     # ---------------------------------------------------------------- POST /ollama_verdict
     def ollama_verdict(self, body: Dict[str, Any]) -> Dict[str, Any]:
-        self.job_dir(str(body.get("job_id", "")))
+        job_dir = self.job_dir(str(body.get("job_id", "")))
         cands = body.get("candidates")
         if not isinstance(cands, list):
             raise StageError("ollama_verdict", "candidates list is required", None)
+        tj = job_dir / "transcript.json"
+        words = transcribe_mod.load_words(tj) if tj.exists() else []
         out = []
         for c in cands:
             cc = dict(c)
             try:
+                s0, s1 = float(c.get("start", 0)), float(c.get("end", 0))
+                spoken = " ".join(w["word"] for w in words if s0 <= float(w["start"]) < s1)[:400]
                 cc["llm"] = verdict_for_candidate(self.cfg.OLLAMA_URL, self.cfg.OLLAMA_MODEL, cc,
-                                                  timeout=self.cfg.OLLAMA_TIMEOUT_SEC)
+                                                  timeout=self.cfg.OLLAMA_TIMEOUT_SEC, spoken=spoken)
             except Exception as exc:  # never raise on LLM failure
                 cc["llm"] = None
                 cc["llm_error"] = str(exc)
@@ -393,6 +397,7 @@ class Stages:
             "clip": str(output), "privacy": privacy,
             "title": str(body.get("title") or "").strip(),
             "hook": str((candidate.get("llm") or {}).get("hook_line") or ""),
+            "llm_title": str((candidate.get("llm") or {}).get("title") or ""),
             "reason": str(candidate.get("reason") or ""),
             "spoken": spoken,
             "game": str(body.get("game") or self.cfg.GAME or ""),

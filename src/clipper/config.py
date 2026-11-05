@@ -37,7 +37,7 @@ class ClipperConfig:
     # Services
     RUNNER_URL: str = "http://host.docker.internal:5690"
     OLLAMA_URL: str = "http://host.docker.internal:11434"
-    OLLAMA_MODEL: str = "llama3.2:latest"
+    OLLAMA_MODEL: str = "nemotron-3-nano:4b"   # 2.8 GB; llama3.2:latest still works as a fallback
     SOCIAL_WEBHOOK_URL: str = "http://localhost:5678/webhook/smartergamers-clip"
 
     # Posting (only ever on an explicit "post" reply in the review chat). Reuses the existing YouTube

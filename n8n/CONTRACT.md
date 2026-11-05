@@ -22,7 +22,7 @@ runner side (`src/clipper/config.py`, env-overridable). Defaults:
 | RUN_LOG | `C:\SmarterGamers\Clips\runs.jsonl` |
 | RUNNER_URL | `http://host.docker.internal:5690` |
 | OLLAMA_URL | `http://host.docker.internal:11434` |
-| OLLAMA_MODEL | `llama3.2:latest` |
+| OLLAMA_MODEL | `nemotron-3-nano:4b` (2.8 GB; benchmarked Nov 2026 against llama3.2, qwen3:4b, gemma4:e2b on real candidates — best titles/hooks at the lowest VRAM; llama3.2 remains a valid fallback) |
 | TARGET_LEN_SEC | `30` (15 / 60 allowed) |
 | REVIEW_CHANNEL | `telegram` (discord / email swappable) |
 | REVIEW_TIMEOUT_HOURS | `24` |

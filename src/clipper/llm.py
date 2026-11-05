@@ -22,7 +22,8 @@ def chat_json(base_url: str, model: str, system: str, user: str, timeout: int = 
         "model": model,
         "stream": False,
         "format": "json",
-        "options": {"temperature": 0.2},
+        "think": False,                      # qwen3 / nemotron: skip the thinking pass (JSON only, fast)
+        "options": {"temperature": 0.2, "num_predict": 320},
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }).encode("utf-8")
     req = urllib.request.Request(base_url.rstrip("/") + "/api/chat", data=body,
@@ -56,25 +57,43 @@ def post_json(url: str, payload: Dict[str, Any], timeout: int = 90) -> Any:
         return raw
 
 
+VERDICT_SYSTEM = (
+    "You are a short-form gaming video editor reviewing one candidate clip for TikTok/YouTube Shorts. "
+    "You get a plain-text description of the clip. Answer with ONE JSON object only, no prose, with exactly these keys: "
+    "verdict (one plain-English sentence: what works or what is wrong), "
+    "fix (one concrete edit, with a timestamp when relevant), "
+    "hook_line (on-screen text hook, max 8 words, specific to what happens or what is said; never generic like "
+    "'Firefight detected'), "
+    "title (YouTube Shorts title, max 60 chars, specific, no emojis, never the words clip/9:16/detected), "
+    "agrees (true if you agree with the heuristic score and its biggest_fix, else false). "
+    "'gunfire/impact' in the audio analysis means loud game sounds, not literal fire."
+)
+
+
 def verdict_for_candidate(base_url: str, model: str, candidate: Dict[str, Any],
-                          timeout: int = 60) -> Dict[str, Any]:
-    """Asks Ollama for a verdict on one candidate. Returns the ``llm`` dict (raises OllamaError)."""
+                          timeout: int = 60, spoken: str = "") -> Dict[str, Any]:
+    """Asks Ollama for a verdict on one candidate. Returns the ``llm`` dict (raises OllamaError).
+
+    The prompt is labelled plain text, not JSON: small models under ``format: json`` tend to echo a JSON user
+    turn back verbatim. ``spoken`` (the streamer's words inside the window) is what makes hooks and titles
+    specific instead of a paraphrase of the signal string.
+    """
     pred = candidate.get("predict") or {}
-    system = ("You review 9:16 gaming clips for TikTok/Shorts. Reply ONLY with JSON: "
-              '{"verdict": "<one sentence>", "fix": "<one concrete edit>", '
-              '"hook_line": "<<=8 word on-screen hook>", "agrees": true|false}. '
-              "'agrees' means you agree with the heuristic score and biggest_fix.")
-    user = json.dumps({
-        "window": f"{candidate.get('start')}-{candidate.get('end')}s",
-        "reason": candidate.get("reason"),
-        "signals": candidate.get("signals"),
-        "heuristic": {k: pred.get(k) for k in ("total", "hook", "retention", "clarity", "length_fit", "biggest_fix")},
-        "lulls": pred.get("lulls"),
-    })
-    out = chat_json(base_url, model, system, user, timeout)
+    reason = str(candidate.get("reason") or "").replace("firefight detected", "gunfire/impact")
+    user = (
+        f"CLIP WINDOW: {candidate.get('start')}-{candidate.get('end')}s of a live stream recording.\n"
+        f"WHAT THE AUDIO ANALYSIS FOUND: {reason}.\n"
+        f"WHAT THE STREAMER SAYS IN THIS WINDOW: {spoken.strip() or '(nothing - no speech)'}\n"
+        f"HEURISTIC SCORE: {pred.get('total')}/100 (hook {pred.get('hook')}, retention {pred.get('retention')}, "
+        f"clarity {pred.get('clarity')}); its biggest_fix: {pred.get('biggest_fix')}.\n"
+        "Now give the JSON object."
+    )
+    out = chat_json(base_url, model, VERDICT_SYSTEM, user, timeout)
+    title = str(out.get("title", "")).strip()
     return {
         "verdict": str(out.get("verdict", "")).strip(),
         "fix": str(out.get("fix", "")).strip(),
         "hook_line": str(out.get("hook_line", "")).strip(),
+        "title": title[:100],
         "agrees": bool(out.get("agrees", False)),
     }

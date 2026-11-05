@@ -21,7 +21,7 @@ LIVE_CTA = getattr(yu, "LIVE_CTA_URL", "https://www.tiktok.com/@SmarterGamers/li
 
 
 def make_title(req: dict) -> str:
-    t = req.get("title") or ""
+    t = req.get("title") or req.get("llm_title") or ""
     if not t:
         hook = (req.get("hook") or "").strip().strip('"').rstrip(".!")
         reason = (req.get("reason") or "").split(" + ")[0].strip()
