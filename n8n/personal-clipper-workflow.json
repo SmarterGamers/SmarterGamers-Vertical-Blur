@@ -169,6 +169,18 @@
               "type": "string"
             },
             {
+              "id": "986959d2-b376-4ab7-a378-09ddd7ec36c9",
+              "name": "CAPTURES",
+              "value": "C:\\Users\\ultim\\Videos\\Captures",
+              "type": "string"
+            },
+            {
+              "id": "b9771054-390e-4fb7-801b-53b931e95e76",
+              "name": "CONTAINER_CAPTURES",
+              "value": "/data/captures",
+              "type": "string"
+            },
+            {
               "id": "645451f6-61e6-4ddb-87a5-c1a763d51e83",
               "name": "TELEGRAM_CHAT_ID",
               "value": "REPLACE_WITH_YOUR_CHAT_ID",
@@ -226,7 +238,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Map whatever trigger fired into { path: <Windows path for the runner>, original: <basename>, trigger: <which> }\nconst cfg = $('Config').first().json;\nconst j = $input.first().json;\n\nlet raw = null;\nlet trigger = 'manual';\nif (j.path && typeof j.path === 'string' && !j.body) {\n  raw = j.path; trigger = 'file';                 // Local File Trigger → { event, path }\n} else if (j.body && j.body.path) {\n  raw = j.body.path; trigger = 'webhook';         // Webhook → { body: { path } }\n} else {\n  raw = cfg.MANUAL_PATH; trigger = 'manual';      // Manual Trigger → Config.MANUAL_PATH\n}\nif (!raw) throw new Error('No input path. Set Config.MANUAL_PATH or POST {\"path\": ...} to the webhook.');\n\n// Container path → Windows path (only when the path starts with CONTAINER_INBOX).\nlet winPath = raw;\nconst cInbox = (cfg.CONTAINER_INBOX || '').replace(/\\/+$/, '');\nif (cInbox && raw.startsWith(cInbox + '/')) {\n  const rel = raw.slice(cInbox.length + 1).replace(/\\//g, '\\\\');\n  winPath = cfg.INBOX.replace(/\\\\+$/, '') + '\\\\' + rel;\n}\nconst original = winPath.split(/[\\\\/]/).pop();\nreturn [{ json: { path: winPath, raw_path: raw, original, trigger } }];\n"
+        "jsCode": "// Map whatever trigger fired into { path: <Windows path for the runner>, original: <basename>, trigger: <which> }\nconst cfg = $('Config').first().json;\nconst j = $input.first().json;\n\nlet raw = null;\nlet trigger = 'manual';\nif (j.path && typeof j.path === 'string' && !j.body) {\n  raw = j.path; trigger = 'file';                 // Local File Trigger → { event, path }\n} else if (j.body && j.body.path) {\n  raw = j.body.path; trigger = 'webhook';         // Webhook → { body: { path } }\n} else {\n  raw = cfg.MANUAL_PATH; trigger = 'manual';      // Manual Trigger → Config.MANUAL_PATH\n}\nif (!raw) throw new Error('No input path. Set Config.MANUAL_PATH or POST {\"path\": ...} to the webhook.');\n\n// Container path → Windows path for every watched folder (Inbox is consumed; Captures is read in place).\nlet winPath = raw;\nconst maps = [[cfg.CONTAINER_INBOX, cfg.INBOX], [cfg.CONTAINER_CAPTURES, cfg.CAPTURES]];\nfor (const [cDir, wDir] of maps) {\n  const c = (cDir || '').replace(/\\/+$/, '');\n  if (c && wDir && raw.startsWith(c + '/')) {\n    const rel = raw.slice(c.length + 1).replace(/\\//g, '\\\\');\n    winPath = wDir.replace(/\\\\+$/, '') + '\\\\' + rel;\n    if (trigger === 'file') trigger = raw.startsWith((cfg.CONTAINER_CAPTURES || '\\0').replace(/\\/+$/, '') + '/') ? 'captures' : 'file';\n    break;\n  }\n}\nconst original = winPath.split(/[\\\\/]/).pop();\nreturn [{ json: { path: winPath, raw_path: raw, original, trigger } }];\n"
       },
       "id": "15e2c474-a3b4-43eb-9ca8-5d2d80775da9",
       "name": "Normalize Input",
@@ -1266,6 +1278,29 @@
         6410,
         280
       ]
+    },
+    {
+      "parameters": {
+        "triggerOn": "folder",
+        "path": "/data/captures",
+        "events": [
+          "add"
+        ],
+        "options": {
+          "usePolling": true,
+          "awaitWriteFinish": true,
+          "ignoreInitial": true,
+          "followSymlinks": false
+        }
+      },
+      "id": "54020459-10ba-44bb-89eb-a8a456b126c2",
+      "name": "Captures Trigger",
+      "type": "n8n-nodes-base.localFileTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -260
+      ]
     }
   ],
   "connections": {
@@ -1693,6 +1728,17 @@
         [
           {
             "node": "Telegram: Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Captures Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
             "type": "main",
             "index": 0
           }

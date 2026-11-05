@@ -13,6 +13,7 @@ Under the `n8n` service's existing `volumes:` list, add one line:
       - ./data:/data/shared                 # (already there)
       # ... your existing read-only mount   # (already there)
       - C:/SmarterGamers/Clips:/data/clips  # ADD — Inbox/Working/Ready become /data/clips/* in the container
+      - C:/Users/ultim/Videos/Captures:/data/captures:ro  # ADD (optional) — instant-replay captures, watched in place (read-only; the runner hard-links them)
 ```
 
 Forward slashes are correct for Docker Desktop on Windows. The runner on the host still uses

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -148,7 +149,20 @@ class Stages:
         job_id = job_dir.name
         job_dir.mkdir(parents=True, exist_ok=True)
         dst = job_dir / f"source{src.suffix.lower()}"
-        shutil.move(str(src), str(dst))
+        # Files dropped in INBOX are consumed (moved). Anything else — OBS/ShadowPlay capture folders that
+        # are watched in place — is left where it is: hard-link when on the same volume (instant, no extra
+        # disk), else copy.
+        try:
+            in_inbox = src.resolve().parent == self.cfg.INBOX.resolve()
+        except OSError:
+            in_inbox = False
+        if in_inbox:
+            shutil.move(str(src), str(dst))
+        else:
+            try:
+                os.link(src, dst)
+            except OSError:
+                shutil.copy2(src, dst)
         try:
             info = audio_mod.probe(dst)
         except Exception as exc:
