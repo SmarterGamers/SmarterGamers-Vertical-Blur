@@ -290,11 +290,15 @@ class Stages:
         volume = float(body.get("volume", 0.0) or 0.0)
 
         source = Path(meta["source"])
+        # Each render gets its own work dir: renders for several picks can run concurrently (n8n fires
+        # one request per item) and the CLI writes a fixed output name, so sharing job_dir lost clips.
+        work = job_dir / f"render_clip{rank}"
+        work.mkdir(parents=True, exist_ok=True)
         captions_path: Optional[Path] = None
         if use_captions:
             tj = job_dir / "transcript.json"
             words = transcribe_mod.load_words(tj) if tj.exists() else []
-            res = captions_mod.write_caption_files(words, start, end, job_dir)
+            res = captions_mod.write_caption_files(words, start, end, work)
             captions_path = Path(res["ass"])
 
         main_py = self.cfg.REPO_DIR / "src" / "main.py"
@@ -304,10 +308,10 @@ class Stages:
                "--hwaccel"]
         if captions_path:
             cmd += ["--captions", str(captions_path)]
-        cmd += ["-o", str(job_dir)]
+        cmd += ["-o", str(work)]
         cli_str = subprocess.list2cmdline(cmd)
 
-        expected = job_dir / f"{source.stem}_short.mp4"
+        expected = work / f"{source.stem}_short.mp4"
         if expected.exists():
             expected.unlink()
         try:

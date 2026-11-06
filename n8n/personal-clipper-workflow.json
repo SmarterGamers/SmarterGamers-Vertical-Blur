@@ -1279,6 +1279,12 @@
             "response": {
               "responseFormat": "json"
             }
+          },
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
+            }
           }
         }
       },
@@ -1304,6 +1310,12 @@
           "response": {
             "response": {
               "responseFormat": "json"
+            }
+          },
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
             }
           }
         }
@@ -1485,6 +1497,12 @@
           "response": {
             "response": {
               "responseFormat": "json"
+            }
+          },
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
             }
           }
         }
@@ -1773,6 +1791,12 @@
           "response": {
             "response": {
               "responseFormat": "json"
+            }
+          },
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
             }
           }
         }
