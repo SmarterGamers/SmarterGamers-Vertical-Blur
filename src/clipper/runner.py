@@ -118,10 +118,12 @@ class Stages:
     # ---------------------------------------------------------------- POST /guard
     def guard(self, body: Dict[str, Any]) -> Dict[str, Any]:
         path = Path(str(body.get("path", "")))
-        if not path.is_file():
-            raise StageError("guard", f"file not found: {path}", None)
-        if path.suffix.lower() not in self.cfg.VIDEO_EXTENSIONS:
+        # Temp / hidden locations (download fragments, editor scratch) and non-video names are skipped
+        # quietly, and so is a file that vanished before we got to it: none of these deserve an alert.
+        if any(part.startswith(".") for part in path.parts) or path.suffix.lower() not in self.cfg.VIDEO_EXTENSIONS:
             return {"skip": True, "reason": "not_video"}
+        if not path.is_file():
+            return {"skip": True, "reason": "gone"}
         digest = file_hash(path)
         if self.ledger.is_processed(digest):
             return {"skip": True, "reason": "already_processed", "hash": digest}

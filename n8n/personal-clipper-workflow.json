@@ -28,7 +28,9 @@
           "usePolling": true,
           "awaitWriteFinish": true,
           "ignoreInitial": true,
-          "followSymlinks": false
+          "followSymlinks": false,
+          "depth": 0,
+          "ignored": "**/.*/**"
         }
       },
       "id": "22fc396e-2fdf-41aa-869f-e0c5f00249b3",

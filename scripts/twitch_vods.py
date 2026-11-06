@@ -3,8 +3,8 @@
 Lists the channel's archive VODs with yt-dlp (no login needed for public VODs), downloads the ones not
 seen before into ``INBOX`` as ``twitch_<vod id>_<title>.mp4`` (best <= 1080p, mp4), and records them in
 ``<LEDGER dir>/twitch_vods.json``. The Inbox watcher then runs the normal clipper flow (auto mode: clip it
-moments + best picks → scheduled Shorts). Downloads go to ``Inbox/.twitch_tmp`` first and are moved in only
-when complete, so the watcher never sees a half-written file.
+moments + best picks → scheduled Shorts). Downloads go to ``<Clips root>/.twitch_tmp`` (a sibling of Inbox,
+never inside it) and are moved in only when complete, so the watcher never sees fragments or a half-written file.
 
 Usage (run by the runner's /twitch_sync, or by hand):
     python scripts/twitch_vods.py [--channel smartergamers] [--max 1] [--dry-run]
@@ -74,7 +74,8 @@ def main() -> int:
     if not new:
         log("nothing new")
         return 0
-    tmp = cfg.INBOX / ".twitch_tmp"
+    # NOT inside Inbox: the n8n folder watcher would fire on every download fragment.
+    tmp = cfg.INBOX.parent / ".twitch_tmp"
     tmp.mkdir(parents=True, exist_ok=True)
     done = 0
     for v in new[: args.max]:
