@@ -20,9 +20,13 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 PLAY_W, PLAY_H = 1080, 1920
 SIDE_MARGIN = 120                  # keeps text clear of the right-hand like/comment column
-CAPTION_Y = int(PLAY_H * 0.62)     # vertical centre of captions (1190 px)
+CAPTION_Y = int(PLAY_H * 0.62)     # vertical centre of captions (1190 px) — "blur" layout
 ZONE_TOP = int(PLAY_H * 0.52)      # allowed band: 52 % .. 75 % of the frame height
 ZONE_BOTTOM = int(PLAY_H * 0.75)
+# "stream" layout (facecam top, gameplay 660..1470): captions sit in the band under the gameplay panel,
+# still above the bottom ~20 % where the platform UI lives.
+STREAM_CAPTION_Y = int(PLAY_H * 0.80)   # 1536 px
+STREAM_ZONE = (int(PLAY_H * 0.77), int(PLAY_H * 0.84))
 FONT_NAME = "Arial"
 FONT_SIZE = 78
 MIN_FONT_SIZE = 40
@@ -45,6 +49,37 @@ BLACK = "&H00000000"
 PROFANITY_ROOTS = ("fuck", "shit", "bitch", "asshole", "cunt", "motherfuck", "dumbass", "bullshit", "goddamn",
                    "dick", "pussy", "cocksucker", "whore", "slut", "nigg", "fag", "retard")
 MASK_PROFANITY = True
+
+# Emoji reactions appended to a caption chunk when it contains a trigger word (first match wins; one
+# emoji per chunk so it reads as a reaction, not confetti). Rendered via EMOJI_FONT (Segoe UI Emoji on
+# Windows, Noto Color Emoji elsewhere; libass draws the glyph, in colour where the build supports it).
+EMOJI_FONT = "Segoe UI Emoji"
+EMOJI_RULES = (
+    (("let's go", "lets go", "yes", "yeah", "hell yeah", "clutch"), "\U0001F525"),   # fire
+    (("holy", "oh my god", "omg", "what the", "no way", "bro", "dude"), "\U0001F631"),  # screaming
+    (("tank", "boom", "explode", "exploded", "nuke", "rocket", "rpg"), "\U0001F4A5"),  # collision
+    (("kill", "killed", "headshot", "snipe", "sniped", "clapped", "cooked"), "\U0001F480"),  # skull
+    (("lol", "lmao", "haha", "funny", "bruh", "nice"), "\U0001F602"),                 # joy
+    (("president", "king", "goat", "legend"), "\U0001F451"),                         # crown
+    (("turbo", "engine", "drift", "car", "truck", "speed"), "\U0001F3CE"),           # race car
+    (("ghost",), "\U0001F47B"),
+    (("love", "thank", "follow", "sub", "subs"), "\U0001F49C"),                      # purple heart
+    (("dead", "died", "rip", "gg"), "\U0001FAE1"),                                   # salute
+    (("sick", "insane", "crazy", "wild"), "\U0001F92F"),                             # exploding head
+)
+ENABLE_EMOJI = True
+
+
+def emoji_for(text: str) -> str:
+    """One reaction emoji for a caption chunk, or "" when no trigger word is present."""
+    if not ENABLE_EMOJI:
+        return ""
+    low = " " + "".join(ch if ch.isalnum() or ch in "' " else " " for ch in text.lower()) + " "
+    for triggers, emo in EMOJI_RULES:
+        for t in triggers:
+            if f" {t} " in low:
+                return emo
+    return ""
 
 
 def mask_profanity(word: str) -> str:
@@ -72,8 +107,10 @@ class CaptionChunk:
         return " ".join(w["word"].strip() for w in self.words)
 
 
-def safe_zone_rect() -> Tuple[int, int, int, int]:
-    """(x0, y0, x1, y1) in canvas pixels where caption boxes must lie."""
+def safe_zone_rect(layout: str = "blur") -> Tuple[int, int, int, int]:
+    """(x0, y0, x1, y1) in canvas pixels where caption boxes must lie for the given render layout."""
+    if layout == "stream":
+        return (SIDE_MARGIN, STREAM_ZONE[0], PLAY_W - SIDE_MARGIN, STREAM_ZONE[1])
     return (SIDE_MARGIN, ZONE_TOP, PLAY_W - SIDE_MARGIN, ZONE_BOTTOM)
 
 
@@ -112,12 +149,12 @@ def caption_chunks(words: Sequence[Dict[str, Any]], clip_start: float, clip_end:
     return chunks
 
 
-def layout_chunk(chunk: CaptionChunk) -> Dict[str, Any]:
-    """Estimates font size and bounding box for a chunk so it fits the safe zone.
+def layout_chunk(chunk: CaptionChunk, layout: str = "blur") -> Dict[str, Any]:
+    """Estimates font size and bounding box for a chunk so it fits the safe zone of ``layout``.
 
     Returns ``{"font_size", "bbox": (x0, y0, x1, y1), "center": (x, y)}``.
     """
-    x0, _, x1, _ = safe_zone_rect()
+    x0, _, x1, _ = safe_zone_rect(layout)
     max_w = x1 - x0
     size = FONT_SIZE
     text = chunk.text
@@ -126,7 +163,7 @@ def layout_chunk(chunk: CaptionChunk) -> Dict[str, Any]:
     w = min(max_w, _text_width(text, size))
     h = size * LINE_H_RATIO + 2 * OUTLINE_PX
     cx = (x0 + x1) // 2
-    cy = CAPTION_Y
+    cy = STREAM_CAPTION_Y if layout == "stream" else CAPTION_Y
     bbox = (int(cx - w / 2), int(cy - h / 2), int(cx + w / 2), int(cy + h / 2))
     return {"font_size": size, "bbox": bbox, "center": (cx, cy)}
 
@@ -166,8 +203,11 @@ def _esc(text: str) -> str:
     return text.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", " ")
 
 
-def build_ass(chunks: Sequence[CaptionChunk], highlight_current_word: bool = True) -> str:
-    """ASS document: one style, events positioned with \\pos at the safe-zone centre."""
+def build_ass(chunks: Sequence[CaptionChunk], highlight_current_word: bool = True, layout: str = "blur") -> str:
+    """ASS document: one style, events positioned with \\pos at the safe-zone centre of ``layout``.
+
+    Emoji (see :func:`emoji_for`) are rendered with ``EMOJI_FONT`` via an inline font tag so libass
+    finds a glyph; the words themselves stay in ``FONT_NAME``."""
     header = f"""[Script Info]
 ; Generated by SmarterGamers Personal Clipper
 ScriptType: v4.00+
@@ -185,11 +225,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines: List[str] = []
     for c in chunks:
-        lay = layout_chunk(c)
+        lay = layout_chunk(c, layout)
         cx, cy = lay["center"]
         pos = f"{{\\an5\\pos({cx},{cy})\\fs{lay['font_size']}\\b1}}"
+        emo = emoji_for(c.text)
+        tail = f" {{\\fn{EMOJI_FONT}}}{emo}{{\\fn{FONT_NAME}}}" if emo else ""
         if not highlight_current_word or len(c.words) == 1:
-            lines.append(f"Dialogue: 0,{_ass_time(c.start)},{_ass_time(c.end)},Clip,,0,0,0,,{pos}{_esc(c.text)}")
+            lines.append(f"Dialogue: 0,{_ass_time(c.start)},{_ass_time(c.end)},Clip,,0,0,0,,{pos}{_esc(c.text)}{tail}")
             continue
         # one event per spoken word: the current word is yellow, the rest white
         for i, w in enumerate(c.words):
@@ -201,19 +243,19 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             for j, ww in enumerate(c.words):
                 tok = _esc(ww["word"])
                 parts.append(f"{{\\c{YELLOW}&}}{tok}{{\\c{WHITE}&}}" if j == i else tok)
-            lines.append(f"Dialogue: 0,{_ass_time(seg_start)},{_ass_time(seg_end)},Clip,,0,0,0,,{pos}{' '.join(parts)}")
+            lines.append(f"Dialogue: 0,{_ass_time(seg_start)},{_ass_time(seg_end)},Clip,,0,0,0,,{pos}{' '.join(parts)}{tail}")
     return header + "\n".join(lines) + "\n"
 
 
 def write_caption_files(words: Sequence[Dict[str, Any]], clip_start: float, clip_end: float,
                         out_dir: Path, ass_name: str = "captions.ass",
-                        srt_name: str = "captions.srt") -> Dict[str, Any]:
-    """Writes clip-relative ``captions.ass`` + ``captions.srt`` into ``out_dir``."""
+                        srt_name: str = "captions.srt", layout: str = "blur") -> Dict[str, Any]:
+    """Writes clip-relative ``captions.ass`` + ``captions.srt`` into ``out_dir`` for the render ``layout``."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     chunks = caption_chunks(words, clip_start, clip_end)
     ass_path = out_dir / ass_name
     srt_path = out_dir / srt_name
-    ass_path.write_text(build_ass(chunks), encoding="utf-8")
+    ass_path.write_text(build_ass(chunks, layout=layout), encoding="utf-8")
     srt_path.write_text(build_srt(chunks), encoding="utf-8")
     return {"ass": str(ass_path), "srt": str(srt_path), "chunks": len(chunks)}

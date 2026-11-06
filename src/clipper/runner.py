@@ -313,18 +313,26 @@ class Stages:
         # one request per item) and the CLI writes a fixed output name, so sharing job_dir lost clips.
         work = job_dir / f"render_clip{rank}"
         work.mkdir(parents=True, exist_ok=True)
+        # Layout: a landscape stream recording gets the facecam-top / gameplay-centre "stream" layout (a 16:9
+        # frame letterboxed in the middle of a Short is unwatchable); vertical sources keep the classic blur.
+        layout = str(body.get("layout") or self.cfg.LAYOUT or "auto").lower()
+        if layout == "auto":
+            sw, sh = int(meta.get("width") or 0), int(meta.get("height") or 0)
+            layout = "stream" if sw > sh > 0 else "blur"
         captions_path: Optional[Path] = None
         if use_captions:
             tj = job_dir / "transcript.json"
             words = transcribe_mod.load_words(tj) if tj.exists() else []
-            res = captions_mod.write_caption_files(words, start, end, work)
+            res = captions_mod.write_caption_files(words, start, end, work, layout=layout)
             captions_path = Path(res["ass"])
 
         main_py = self.cfg.REPO_DIR / "src" / "main.py"
         cmd = [str(self.cfg.PYTHON_EXE), str(main_py), str(source), "--preset", "shorts",
                "--start", f"{start:.3f}", "--duration", f"{duration:.3f}",
                "--audio-mode", audio_mode, "--volume", f"{volume:.1f}", "--offset", str(offset),
-               "--hwaccel"]
+               "--hwaccel", "--layout", layout]
+        if layout == "stream" and self.cfg.FACECAM_BOX:
+            cmd += ["--facecam", str(self.cfg.FACECAM_BOX)]
         if captions_path:
             cmd += ["--captions", str(captions_path)]
         cmd += ["-o", str(work)]
@@ -351,7 +359,7 @@ class Stages:
         shutil.move(str(expected), str(final))
 
         encoder = _encoder_from_output_file(final) or _encoder_from_cli_output(stdout)
-        return {"output": str(final), "cli": cli_str, "encoder": encoder,
+        return {"output": str(final), "cli": cli_str, "encoder": encoder, "layout": layout,
                 "captions": str(captions_path) if captions_path else None, "duration": round(duration, 3)}
 
     # ---------------------------------------------------------------- POST /package

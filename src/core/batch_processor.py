@@ -17,7 +17,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 from core.ffmpeg_engine import FFmpegEngine, VideoMetadata
 
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -41,6 +41,8 @@ class JobConfig:
     enable_hwaccel: bool = True
     output_dir: Optional[Path] = None
     captions_path: Optional[Path] = None  # optional .ass/.srt burned in after the overlay
+    layout: str = "blur"                  # "blur" (classic) or "stream" (facecam top + gameplay centre crop)
+    facecam_box: Optional[Tuple[float, float, float, float]] = None  # stream layout: x, y, w, h fractions
 
 
 @dataclass
@@ -231,6 +233,8 @@ class BatchProcessor:
             duration_sec=job.config.duration_sec,
             enable_hwaccel=job.config.enable_hwaccel,
             captions_path=str(job.config.captions_path) if job.config.captions_path else None,
+            layout=job.config.layout,
+            facecam_box=job.config.facecam_box,
         )
 
         try:

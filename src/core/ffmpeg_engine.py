@@ -221,6 +221,69 @@ class FFmpegEngine:
         except Exception:
             return None
 
+    DEFAULT_FACECAM_BOX: Tuple[float, float, float, float] = (0.03, 0.50, 0.31, 0.43)
+    STREAM_CAM_H = 600          # facecam height on the canvas (top band)
+    STREAM_CAM_Y = 40
+    STREAM_GAME_ASPECT = 4 / 3  # centre crop of the gameplay: 4:3 of the source height
+    STREAM_GAME_Y = 660         # top of the gameplay panel on a 1920-high canvas
+
+    def _bg_chain(self, target_w: int, target_h: int, blur_strength: int, blur_algorithm: str,
+                  dim_factor: float) -> str:
+        """Blurred, dimmed, canvas-filling background chain (shared by every layout)."""
+        if blur_algorithm == "boxblur":
+            sub_w = max(16, (target_w // 4 // 2) * 2)
+            sub_h = max(16, (target_h // 4 // 2) * 2)
+            radius = max(2, int(blur_strength * 0.6))
+            bg_filters = [
+                "format=yuv420p",
+                f"scale={sub_w}:{sub_h}:force_original_aspect_ratio=increase",
+                f"crop={sub_w}:{sub_h}",
+                f"boxblur=luma_radius={radius}:luma_power=2:chroma_radius={radius}:chroma_power=2",
+            ]
+            if dim_factor < 0.99:
+                bg_filters.append(f"colorlevels=rimax={dim_factor:.2f}:gimax={dim_factor:.2f}:bimax={dim_factor:.2f}")
+            bg_filters.append(f"scale={target_w}:{target_h}:flags=bilinear")
+            return ",".join(bg_filters)
+        sigma = max(1, blur_strength)
+        bg_filters = [
+            "format=yuv420p",
+            f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase",
+            f"crop={target_w}:{target_h}",
+            f"gblur=sigma={sigma}",
+        ]
+        if dim_factor < 0.99:
+            bg_filters.append(f"colorlevels=rimax={dim_factor:.2f}:gimax={dim_factor:.2f}:bimax={dim_factor:.2f}")
+        return ",".join(bg_filters)
+
+    def _stream_layout(self, target_w: int, target_h: int, blur_strength: int, blur_algorithm: str,
+                       dim_factor: float, captions_path: Optional[str],
+                       facecam_box: Tuple[float, float, float, float]) -> str:
+        """16:9 stream recording -> vertical: facecam on top, gameplay centre-crop below, captions under it.
+
+        Geometry on a 1080x1920 canvas (scaled proportionally for other sizes): facecam cut from the
+        source at ``facecam_box`` (fractions of the frame), scaled to 600 px high and centred at y=40;
+        the gameplay is a centred 4:3 crop of the full source height scaled to the canvas width
+        (1080x810) and placed at y=660, leaving the band below (~1470..1920) for captions.
+        """
+        k = target_h / 1920.0
+        cam_h = int(self.STREAM_CAM_H * k) // 2 * 2
+        cam_y = int(self.STREAM_CAM_Y * k)
+        game_y = int(self.STREAM_GAME_Y * k)
+        fx, fy, fw, fh = facecam_box
+        bg_chain = self._bg_chain(target_w, target_h, blur_strength, blur_algorithm, dim_factor)
+        cam_chain = (f"format=yuv420p,crop=iw*{fw:.4f}:ih*{fh:.4f}:iw*{fx:.4f}:ih*{fy:.4f},"
+                     f"scale=-2:{cam_h}:flags=lanczos")
+        game_chain = (f"format=yuv420p,crop='min(iw,ih*{self.STREAM_GAME_ASPECT:.4f})':ih:(iw-ow)/2:0,"
+                      f"scale={target_w}:-2:flags=lanczos")
+        graph = (f"[0:v]split=3[bg_in][cam_in][game_in];[bg_in]{bg_chain}[bg_out];"
+                 f"[cam_in]{cam_chain}[cam];[game_in]{game_chain}[game];"
+                 f"[bg_out][cam]overlay=(W-w)/2:{cam_y}:format=yuv420[v1];"
+                 f"[v1][game]overlay=(W-w)/2:{game_y}:format=yuv420")
+        if captions_path:
+            escaped = self.escape_filter_path(captions_path)
+            return f"{graph}[vpre];[vpre]subtitles='{escaped}'[vout]"
+        return f"{graph}[vout]"
+
     def build_filtergraph(
         self,
         target_w: int = 1080,
@@ -231,45 +294,31 @@ class FFmpegEngine:
         vertical_offset: int = 0,
         sharp_scale: float = 1.0,
         captions_path: Optional[str] = None,
+        layout: str = "blur",
+        facecam_box: Optional[Tuple[float, float, float, float]] = None,
     ) -> str:
         """Constructs an optimized FFmpeg filtergraph with format normalization and dimension guards.
 
         When ``captions_path`` is given, an ASS/SRT ``subtitles=`` burn-in stage is appended
         after the overlay. With ``captions_path=None`` the output is byte-identical to the
         caption-less graph.
+
+        ``layout="blur"`` (default) is the classic look: the whole frame scaled to the canvas width
+        over a blurred, dimmed copy of itself. ``layout="stream"`` is for 16:9 stream recordings:
+        the facecam (``facecam_box`` as fractions x, y, w, h of the source frame) is cut out and
+        placed at the top, and the centre of the gameplay fills the width below it; the blurred
+        background and the captions stage are the same. See :meth:`_stream_layout`.
         """
         target_w = (target_w // 2) * 2
         target_h = (target_h // 2) * 2
+        if layout == "stream":
+            return self._stream_layout(target_w, target_h, blur_strength, blur_algorithm, dim_factor,
+                                       captions_path, facecam_box or self.DEFAULT_FACECAM_BOX)
 
         fg_w = int(target_w * sharp_scale)
         fg_w = (fg_w // 2) * 2
 
-        if blur_algorithm == "boxblur":
-            sub_w = max(16, (target_w // 4 // 2) * 2)
-            sub_h = max(16, (target_h // 4 // 2) * 2)
-            radius = max(2, int(blur_strength * 0.6))
-
-            bg_filters = [
-                "format=yuv420p",
-                f"scale={sub_w}:{sub_h}:force_original_aspect_ratio=increase",
-                f"crop={sub_w}:{sub_h}",
-                f"boxblur=luma_radius={radius}:luma_power=2:chroma_radius={radius}:chroma_power=2",
-            ]
-            if dim_factor < 0.99:
-                bg_filters.append(f"colorlevels=rimax={dim_factor:.2f}:gimax={dim_factor:.2f}:bimax={dim_factor:.2f}")
-            bg_filters.append(f"scale={target_w}:{target_h}:flags=bilinear")
-            bg_chain = ",".join(bg_filters)
-        else:
-            sigma = max(1, blur_strength)
-            bg_filters = [
-                "format=yuv420p",
-                f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase",
-                f"crop={target_w}:{target_h}",
-                f"gblur=sigma={sigma}",
-            ]
-            if dim_factor < 0.99:
-                bg_filters.append(f"colorlevels=rimax={dim_factor:.2f}:gimax={dim_factor:.2f}:bimax={dim_factor:.2f}")
-            bg_chain = ",".join(bg_filters)
+        bg_chain = self._bg_chain(target_w, target_h, blur_strength, blur_algorithm, dim_factor)
 
         fg_chain = f"format=yuv420p,scale={fg_w}:-2:flags=lanczos"
 
@@ -317,6 +366,8 @@ class FFmpegEngine:
         duration_sec: Optional[float] = None,
         enable_hwaccel: bool = True,
         captions_path: Optional[str] = None,
+        layout: str = "blur",
+        facecam_box: Optional[Tuple[float, float, float, float]] = None,
     ) -> List[str]:
         """Constructs full FFmpeg command list for rendering with trimming, audio mixing, and GPU acceleration.
 
@@ -348,6 +399,8 @@ class FFmpegEngine:
             vertical_offset=vertical_offset,
             sharp_scale=sharp_scale,
             captions_path=captions_path,
+            layout=layout,
+            facecam_box=facecam_box,
         )
 
         # Multi-Track Audio Mixing / Filtering

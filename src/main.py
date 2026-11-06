@@ -59,6 +59,8 @@ def run_cli(args):
         enable_hwaccel=args.hwaccel,
         output_dir=out_dir,
         captions_path=Path(args.captions) if args.captions else None,
+        layout=args.layout,
+        facecam_box=_parse_facecam(args.facecam),
     )
 
     batch = BatchProcessor(engine)
@@ -107,6 +109,16 @@ def run_gui(force_classic: bool = False):
     root.mainloop()
 
 
+def _parse_facecam(spec):
+    """'0.03,0.50,0.31,0.43' -> (0.03, 0.5, 0.31, 0.43); None/blank -> None (engine default)."""
+    if not spec:
+        return None
+    parts = [float(x) for x in spec.split(",")]
+    if len(parts) != 4 or not all(0.0 <= v <= 1.0 for v in parts):
+        raise SystemExit("--facecam must be four fractions: x,y,w,h (0..1)")
+    return tuple(parts)
+
+
 def main():
     parser = argparse.ArgumentParser(description="SmarterGamers Vertical Blur Editor v1.2.0")
     parser.add_argument("inputs", nargs="*", help="Video file paths to process (CLI mode)")
@@ -125,6 +137,10 @@ def main():
     parser.add_argument("--hwaccel", action="store_true", help="Enable GPU hardware decoding")
     parser.add_argument("-o", "--output-dir", type=str, default=None, help="Output destination folder")
     parser.add_argument("--captions", type=str, default=None, help="Optional .ass/.srt subtitle file to burn in")
+    parser.add_argument("--layout", choices=["blur", "stream"], default="blur",
+                        help="blur = classic blurred letterbox (default); stream = 16:9 stream recording -> facecam on top, gameplay centre crop below")
+    parser.add_argument("--facecam", type=str, default=None,
+                        help="stream layout: facecam box as fractions x,y,w,h of the source frame (default 0.03,0.50,0.31,0.43)")
     parser.add_argument("--cli", action="store_true", help="Force headless CLI mode")
     parser.add_argument("--classic", action="store_true", help="Launch lightweight Classic single-file GUI")
 

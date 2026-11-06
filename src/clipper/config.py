@@ -53,6 +53,8 @@ class ClipperConfig:
     REVIEW_TIMEOUT_HOURS: int = 24
     MENU_REFS: Path = Path(r"C:\SmarterGamers\menu_refs.json")  # known menu-screen dHashes (optional; from the upload gate)
     GAME: str = ""                     # name used in the social copy; blank = "gameplay" (streams rotate games)
+    LAYOUT: str = "auto"               # auto = "stream" for landscape sources, "blur" otherwise | blur | stream
+    FACECAM_BOX: str = "0.03,0.50,0.31,0.43"  # stream layout: facecam x,y,w,h as fractions of the 16:9 frame
     MIN_SOURCE_SEC: float = 20.0       # /guard: shorter sources are skipped as too_short
     WHISPER_MODEL: str = "small.en"
     WHISPER_DEVICE: str = "auto"       # auto (cuda then cpu, cached) | cuda | cuda:N (pin to GPU N) | cpu

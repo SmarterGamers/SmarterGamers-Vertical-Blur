@@ -250,3 +250,34 @@ if __name__ == "__main__":
     test_clip_it_voice_command()
     test_caption_profanity_masked()
     print("\nALL CLIPPER TESTS PASSED SUCCESSFULLY!")
+
+
+def test_stream_layout_captions_and_emoji():
+    """Stream layout puts captions under the gameplay panel and adds one reaction emoji per chunk."""
+    from clipper import captions as c
+    words = [{"start": 10.0, "end": 10.3, "word": "there's"}, {"start": 10.3, "end": 10.5, "word": "a"},
+             {"start": 10.5, "end": 10.9, "word": "tank"}]
+    chunks = c.caption_chunks(words, 9.0, 20.0)
+    lay = c.layout_chunk(chunks[0], "stream")
+    x0, y0, x1, y1 = c.safe_zone_rect("stream")
+    bx0, by0, bx1, by1 = lay["bbox"]
+    assert x0 <= bx0 and bx1 <= x1 and y0 <= by0 and by1 <= y1
+    assert lay["center"][1] > c.CAPTION_Y          # below the classic position (under the gameplay panel)
+    ass = c.build_ass(chunks, layout="stream")
+    assert "\\pos(540,%d)" % c.STREAM_CAPTION_Y in ass
+    assert "\\U0001F4A5".encode().decode("unicode_escape") in ass or "\U0001F4A5" in ass   # 💥 for "tank"
+    assert c.emoji_for("we have almost") == ""
+
+
+def test_stream_filtergraph():
+    """The engine's stream layout cuts a facecam, centre-crops the game, and still burns captions."""
+    from core.ffmpeg_engine import FFmpegEngine
+    eng = FFmpegEngine.__new__(FFmpegEngine)
+    g = eng.build_filtergraph(1080, 1920, layout="stream", facecam_box=(0.03, 0.5, 0.31, 0.43),
+                              captions_path="C:\\x\\c.ass")
+    assert "split=3" in g
+    assert "crop=iw*0.3100:ih*0.4300:iw*0.0300:ih*0.5000" in g
+    assert "scale=-2:600" in g and "overlay=(W-w)/2:40" in g and "overlay=(W-w)/2:660" in g
+    assert g.endswith("subtitles='C\\:/x/c.ass'[vout]")
+    classic = eng.build_filtergraph(1080, 1920)
+    assert "split=2" in classic and "[vout]" in classic   # default layout untouched
