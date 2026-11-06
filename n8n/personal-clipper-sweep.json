@@ -1,0 +1,192 @@
+{
+  "name": "Personal Clipper — Day-after Sweep",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "79543a08-905f-4147-9376-5f6dc957a725",
+      "name": "Daily 09:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "21fdecfd-276d-4a43-b63f-52c530cf02ec",
+              "name": "RUNNER_URL",
+              "value": "http://host.docker.internal:5690",
+              "type": "string"
+            },
+            {
+              "id": "eb78e9f6-398b-4114-8bd9-1be71011e465",
+              "name": "TELEGRAM_CHAT_ID",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "8d3f97e4-fd6e-4c30-a2d6-c5aaa5309051",
+              "name": "FLOOR_FRACTION",
+              "value": "0.25",
+              "type": "string"
+            },
+            {
+              "id": "77121b3b-df17-4ae1-ab00-42f5e9e36804",
+              "name": "MIN_AGE_HOURS",
+              "value": "20",
+              "type": "string"
+            },
+            {
+              "id": "9fc1ec1b-401d-47a9-8ad9-b99424b97819",
+              "name": "MAX_AGE_HOURS",
+              "value": "48",
+              "type": "string"
+            },
+            {
+              "id": "37db88ba-00b6-490a-a7fb-11ba6bb3b689",
+              "name": "DRY_RUN",
+              "value": "false",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4240fd2d-ba9c-43c9-a992-bc9db851834e",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.RUNNER_URL }}/sweep",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { dry_run: String($json.DRY_RUN).toLowerCase() === 'true', floor_fraction: Number($json.FLOOR_FRACTION), min_age_hours: Number($json.MIN_AGE_HOURS), max_age_hours: Number($json.MAX_AGE_HOURS) } }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "1c89d835-c442-4fc1-b8e5-2e8ecbfb58af",
+      "name": "Sweep (runner)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Plain-English summary of the sweep for Telegram.\nconst r = $input.first().json || {};\nif (r.error) return [{ json: { text: '⚠️ Day-after sweep failed: ' + String(r.error.message || r.error).slice(0, 300) } }];\nconst lines = [`🧹 Day-after sweep — baseline ${r.baseline_views ?? '?'} views (median of recent Shorts)`];\nconst fmt = v => `${v.views} views / ${v.likes} likes at ${v.age_hours} h — ${v.title}\\n   ${v.url}`;\nif ((r.privatized || []).length) { lines.push(`\\nSet to PRIVATE (${r.privatized.length}, under ${Math.round(100 * ($('Config').first().json.FLOOR_FRACTION || 0.25))}% of baseline, no likes):`); for (const v of r.privatized) lines.push('• ' + fmt(v)); }\nif ((r.kept || []).length) { lines.push(`\\nKept (${r.kept.length}):`); for (const v of r.kept) lines.push('• ' + fmt(v)); }\nif (!(r.checked || []).length) lines.push(`\\nNothing in the 20–48 h window today (${r.candidates_considered || 0} posted clips known).`);\nlines.push('\\nUndo any of these in YouTube Studio (privacy → public).');\nreturn [{ json: { text: lines.join('\\n') } }];\n"
+      },
+      "id": "12802260-4909-4de2-883a-00f4378e4c17",
+      "name": "Summarize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "None"
+        }
+      },
+      "id": "60578617-592f-4738-a4b5-4d9026fdffe1",
+      "name": "Telegram: Sweep Summary",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        0
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 09:00": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Sweep (runner)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sweep (runner)": {
+      "main": [
+        [
+          {
+            "node": "Summarize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Sweep Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  }
+}

@@ -438,6 +438,46 @@ class Stages:
                                        output=body.get("output"), status=body.get("status"))
         return {"hash": digest}
 
+    # ---------------------------------------------------------------- POST /sweep
+    def sweep(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Day-after sweep: privatize under-performing Shorts the clipper posted (scripts/yt_sweep.py).
+
+        Candidates come from runs.jsonl records with a ``posted`` block. Never deletes; ``dry_run`` reports only.
+        """
+        if not self.cfg.YT_PYTHON.is_file():
+            raise StageError("sweep", f"YouTube pipeline python not found: {self.cfg.YT_PYTHON}", None)
+        cands: List[Dict[str, Any]] = []
+        seen = set()
+        try:
+            for line in self.cfg.RUN_LOG.read_text(encoding="utf-8").splitlines():
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                posted = rec.get("posted") or {}
+                vid = posted.get("video_id")
+                if vid and vid not in seen:
+                    seen.add(vid)
+                    cands.append({"video_id": vid, "url": posted.get("url"), "title": posted.get("title"),
+                                  "posted_at": rec.get("logged_at")})
+        except OSError:
+            pass
+        req = {"candidates": cands, "dry_run": bool(body.get("dry_run", False)),
+               "min_age_hours": float(body.get("min_age_hours", 20)), "max_age_hours": float(body.get("max_age_hours", 48)),
+               "floor_fraction": float(body.get("floor_fraction", 0.25)), "baseline_n": int(body.get("baseline_n", 20))}
+        script = self.cfg.REPO_DIR / "scripts" / "yt_sweep.py"
+        proc = subprocess.run([str(self.cfg.YT_PYTHON), "-X", "utf8", str(script)], input=json.dumps(req),
+                              capture_output=True, text=True, encoding="utf-8", cwd=str(self.cfg.YT_PIPELINE_DIR),
+                              timeout=600, creationflags=_NO_WINDOW)
+        if proc.returncode != 0:
+            raise StageError("sweep", f"sweep failed: {(proc.stderr or proc.stdout).strip()[-600:]}", None)
+        try:
+            out = json.loads(proc.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            raise StageError("sweep", f"sweep returned no JSON: {proc.stdout[-300:]}", None)
+        out["candidates_considered"] = len(cands)
+        return out
+
     # ---------------------------------------------------------------- POST /claim_reply
     _claim_lock = __import__("threading").Lock()
 
@@ -518,7 +558,7 @@ def make_handler(stages: Stages) -> type:
         "/guard": stages.guard, "/ingest": stages.ingest, "/transcribe": stages.transcribe,
         "/score": stages.score, "/predict": stages.predict, "/ollama_verdict": stages.ollama_verdict,
         "/render": stages.render, "/package": stages.package, "/log": stages.log,
-        "/claim_reply": stages.claim_reply, "/upload": stages.upload,
+        "/claim_reply": stages.claim_reply, "/upload": stages.upload, "/sweep": stages.sweep,
     }
 
     class Handler(BaseHTTPRequestHandler):

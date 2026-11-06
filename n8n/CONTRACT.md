@@ -90,6 +90,8 @@ Reply: a number (e.g. 2), several ("1 and 5" renders both), "2 start 5s earlier"
 
 Review has two phases: (1) pick a candidate → render; (2) the clip is sent as a Telegram video with its stats → reply `post` / `post 2` / `post all` / `keep`. Timeout in phase 2 keeps the clip in Ready, unposted.
 
+`POST /sweep {dry_run, floor_fraction, min_age_hours, max_age_hours}` → `{baseline_views, checked, privatized, kept, skipped}` — day-after sweep (scripts/yt_sweep.py, manage token): Shorts the clipper posted 20–48 h ago that have < floor_fraction × (median views of recent Shorts) AND 0 likes are set to private (never deleted). Driven by `n8n/personal-clipper-sweep.json` (daily 09:00 ET, Telegram summary).
+
 `POST /claim_reply {update_id, job_id}` → `{claimed: bool, owner}` — first-come claim of a Telegram update so concurrent reviews never act on the same message (claims in `reply_claims.json`, 48 h). A Telegram reply-to (quote) of a review is accepted only by that review and needs no claim. n8n polls getUpdates with offset 0 (never confirms) so one review cannot hide a message from another.
 
 Voice command: saying **"clip it"** (also "clip that" / "clip this") on stream makes the 30 s before the words a candidate — always listed first, always the recommendation, marked `signals.voice_command {text, at}`. The command itself is left out of the clip (window ends 0.3 s before it). Several commands = several candidates on top of the usual five.
