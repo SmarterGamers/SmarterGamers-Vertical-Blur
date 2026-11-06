@@ -273,10 +273,15 @@ class FFmpegEngine:
         bg_chain = self._bg_chain(target_w, target_h, blur_strength, blur_algorithm, dim_factor)
         cam_chain = (f"format=yuv420p,crop=iw*{fw:.4f}:ih*{fh:.4f}:iw*{fx:.4f}:ih*{fy:.4f},"
                      f"scale=-2:{cam_h}:flags=lanczos")
+        # The stream overlay's own facecam would show twice (it sits inside the gameplay crop), so that
+        # rectangle is blurred out of the gameplay panel before the centre crop.
+        patch = (f"[game_in]split=2[g0][g1];[g1]crop=iw*{fw:.4f}:ih*{fh:.4f}:iw*{fx:.4f}:ih*{fy:.4f},"
+                 f"boxblur=luma_radius=24:luma_power=2:chroma_radius=24:chroma_power=2[gp];"
+                 f"[g0][gp]overlay=W*{fx:.4f}:H*{fy:.4f}:format=yuv420[gm];")
         game_chain = (f"format=yuv420p,crop='min(iw,ih*{self.STREAM_GAME_ASPECT:.4f})':ih:(iw-ow)/2:0,"
                       f"scale={target_w}:-2:flags=lanczos")
         graph = (f"[0:v]split=3[bg_in][cam_in][game_in];[bg_in]{bg_chain}[bg_out];"
-                 f"[cam_in]{cam_chain}[cam];[game_in]{game_chain}[game];"
+                 f"[cam_in]{cam_chain}[cam];{patch}[gm]{game_chain}[game];"
                  f"[bg_out][cam]overlay=(W-w)/2:{cam_y}:format=yuv420[v1];"
                  f"[v1][game]overlay=(W-w)/2:{game_y}:format=yuv420")
         if captions_path:
