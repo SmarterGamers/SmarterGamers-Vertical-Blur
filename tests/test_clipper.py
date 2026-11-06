@@ -226,6 +226,17 @@ def test_clip_it_voice_command():
     print("[OK] 'clip it' -> the 30 s before it is candidate #1, strong, and the recommendation")
 
 
+def test_caption_profanity_masked():
+    from clipper.captions import mask_profanity
+    assert mask_profanity("fucking,") == "f******," and mask_profanity("Fuck!") == "F***!" and mask_profanity("bullshit") == "b*******"
+    for ok in ("duck", "assassin", "class", "Scunthorpe", "hello", "shift"):
+        assert mask_profanity(ok) == ok, ok
+    chunks = cap.caption_chunks([{"start": 0.1, "end": 0.4, "word": "fucking"}, {"start": 0.5, "end": 0.8, "word": "turbo"}], 0, 30)
+    ass, srt = cap.build_ass(chunks), cap.build_srt(chunks)
+    assert "f******" in ass and "fucking" not in ass and "f******" in srt
+    print("[OK] burned captions mask profanity (f******), audio untouched")
+
+
 if __name__ == "__main__":
     test_score_moments_ranks_burst_first()
     test_top5_do_not_overlap()
@@ -237,4 +248,5 @@ if __name__ == "__main__":
     test_talk_only_vod_is_not_a_strong_moment()
     test_v1_firefight_event_makes_window_strong()
     test_clip_it_voice_command()
+    test_caption_profanity_masked()
     print("\nALL CLIPPER TESTS PASSED SUCCESSFULLY!")

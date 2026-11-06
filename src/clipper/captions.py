@@ -38,6 +38,29 @@ YELLOW = "&H0000FFFF"              # ASS is BGR: 00FFFF = yellow
 BLACK = "&H00000000"
 
 
+# Profanity masking for burned-in captions (advertiser-friendly Shorts): the word keeps its first letter and
+# length so the caption still reads naturally ("f***ing"). The audio is untouched. Matching is on the
+# letters only, so "fucking," / "FUCK!" / "bullshit" are all caught; false positives on ordinary words are
+# avoided by matching whole tokens, not substrings (except the compound forms listed).
+PROFANITY_ROOTS = ("fuck", "shit", "bitch", "asshole", "cunt", "motherfuck", "dumbass", "bullshit", "goddamn",
+                   "dick", "pussy", "cocksucker", "whore", "slut", "nigg", "fag", "retard")
+MASK_PROFANITY = True
+
+
+def mask_profanity(word: str) -> str:
+    """"fucking," -> "f******,"; non-profane words are returned unchanged."""
+    import re as _re
+    m = _re.match(r"^(\W*)([A-Za-z'\-]+)(\W*)$", word)
+    if not m:
+        return word
+    pre, core, post = m.groups()
+    low = core.lower().replace("'", "").replace("-", "")
+    hit = any(low.startswith(r) or low.endswith(r) or (r in low and len(low) <= len(r) + 4) for r in PROFANITY_ROOTS)
+    if not hit:
+        return word
+    return f"{pre}{core[0]}{'*' * (len(core) - 1)}{post}"
+
+
 @dataclass
 class CaptionChunk:
     start: float            # clip-relative seconds
@@ -67,7 +90,7 @@ def caption_chunks(words: Sequence[Dict[str, Any]], clip_start: float, clip_end:
             return
         rel = [{"start": round(w["start"] - clip_start, 3),
                 "end": round(min(w["end"], clip_end) - clip_start, 3),
-                "word": w["word"].strip()} for w in buf]
+                "word": (mask_profanity(w["word"].strip()) if MASK_PROFANITY else w["word"].strip())} for w in buf]
         start = rel[0]["start"]
         end = max(rel[-1]["end"], start + MIN_CHUNK_SEC)
         chunks.append(CaptionChunk(start=start, end=min(end, clip_end - clip_start), words=rel))
