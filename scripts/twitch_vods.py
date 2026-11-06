@@ -51,9 +51,10 @@ def main() -> int:
     ap.add_argument("--list-limit", type=int, default=5)
     ap.add_argument("--min-minutes", type=float, default=20.0)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--skip", default="", help="comma-separated VOD ids to mark as done without downloading")
     args = ap.parse_args()
 
-    cfg = load_config({})
+    cfg = load_config()           # honours SG_CLIPPER_* overrides (e.g. SG_CLIPPER_INBOX for a holding folder)
     python = str(cfg.PYTHON_EXE)
     ledger_path = cfg.LEDGER.parent / "twitch_vods.json"
     log_path = cfg.LEDGER.parent / "twitch_sync.log"
@@ -64,10 +65,15 @@ def main() -> int:
 
     def log(msg):
         line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-        print(line, flush=True)
+        # VOD titles carry emoji; a cp1252 console must not kill the sync
+        print(line.encode(sys.stdout.encoding or "utf-8", "replace").decode(sys.stdout.encoding or "utf-8"), flush=True)
         with log_path.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
 
+    for vid in [x.strip() for x in args.skip.split(",") if x.strip()]:
+        ledger.setdefault(vid, {"title": "(skipped)", "skipped_at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+    if args.skip:
+        ledger_path.write_text(json.dumps(ledger, indent=1), encoding="utf-8")
     vods = list_archives(python, args.channel, args.list_limit)
     log(f"archives listed: {len(vods)} ({', '.join(v['id'] for v in vods)})")
     new = [v for v in vods if v["id"] not in ledger and v["duration"] >= args.min_minutes * 60]
