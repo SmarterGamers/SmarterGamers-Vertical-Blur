@@ -163,6 +163,36 @@
               "type": "string"
             },
             {
+              "id": "6b4da7be-ff9a-4737-86a8-84b5f879073f",
+              "name": "AUTO_POST",
+              "value": "true",
+              "type": "string"
+            },
+            {
+              "id": "7fe277c4-0a37-4d91-a201-9f8f6c3b5415",
+              "name": "AUTO_MAX_PER_DAY",
+              "value": "4",
+              "type": "string"
+            },
+            {
+              "id": "14ca2cb8-f599-47b4-9162-984374f975af",
+              "name": "AUTO_MIN_SCORE",
+              "value": "80",
+              "type": "string"
+            },
+            {
+              "id": "d4449faf-c84c-4285-aff4-c243b792d60a",
+              "name": "AUTO_SLOTS",
+              "value": "10:00,13:00,16:00,19:00",
+              "type": "string"
+            },
+            {
+              "id": "099116c5-c9f6-4436-9e6c-d4751ca3ceb8",
+              "name": "AUTO_TZ",
+              "value": "America/New_York",
+              "type": "string"
+            },
+            {
               "id": "2bc97220-8aef-4fc5-9e15-a9cce251e88d",
               "name": "BF6_CLIPPER_PATH",
               "value": "C:\\Users\\ultim\\Desktop\\Projects\\HistoryView.org\\bf6_clipper.py",
@@ -630,7 +660,7 @@
       "typeVersion": 3.2,
       "position": [
         3300,
-        300
+        480
       ]
     },
     {
@@ -1327,7 +1357,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Pair each Render result with the pick that produced it (same order; n8n runs Render once per pick).\nconst picks = $('Parse Reply').all();\nreturn $input.all().map((it, i) => ({ json: { ...picks[i].json, render: it.json } }));\n"
+        "jsCode": "// Pair each Render result with the pick that produced it (same order; Render runs once per pick).\nlet picks;\ntry { picks = $('Auto Select').all(); if (!picks.length) throw new Error('no auto picks'); } catch (e) { picks = $('Parse Reply').all(); }\nreturn $input.all().map((it, i) => ({ json: { ...picks[i].json, render: it.json } }));\n"
       },
       "id": "0580d4e1-f444-4d81-8072-98f40b128d39",
       "name": "Attach Pick",
@@ -1376,7 +1406,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Map the preview file to its path inside the n8n container and write the Telegram caption.\nconst cfg = $('Config').first().json;\nconst out = [];\nfor (const it of $input.all()) {\n  const j = it.json;\n  const pkg = j.package || {};\n  const win = pkg.preview || j.render.output;\n  const root = String(cfg.CLIPS_ROOT || '').replace(/\\\\+$/, '');\n  let cpath = null;\n  if (root && win.toLowerCase().startsWith(root.toLowerCase())) {\n    cpath = (cfg.CONTAINER_CLIPS || '/data/clips') + win.slice(root.length).replace(/\\\\/g, '/');\n  }\n  const p = j.candidate.predict || {};\n  const mmss = s => { s = Math.max(0, Math.round(Number(s) || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };\n  const n = j.pick_count > 1 ? ` (${j.pick_index + 1} of ${j.pick_count})` : '';\n  const caption =\n    `🎬 Clip #${j.rank} ready${n} — ${j.original}\\n` +\n    `${mmss(j.start)} → ${mmss(j.end)} (${Math.round(j.duration)} s) · score ${p.total ?? '?'}/100 · ${j.render.encoder || 'encoded'}` +\n    (p.notes && p.notes.visual && p.notes.visual.penalty ? `\\n⚠️ ${p.notes.visual.penalty}` : '') +\n    `\\nSaved: ${j.render.output}\\nCapCut package: ${pkg.package_dir || '-'}` +\n    `\\n\\n👉 Reply \"post\" to upload it to YouTube Shorts (${cfg.POST_PRIVACY || 'public'})` +\n    (j.pick_count > 1 ? `, \"post ${j.rank}\" for just this one, \"post all\" for all ${j.pick_count}` : '') +\n    `, or \"keep\" to leave it in Ready. Long-press → Reply if several are open.`;\n  out.push({ json: { ...j, preview_container_path: cpath, preview_windows_path: win, caption } });\n}\nreturn out;\n"
+        "jsCode": "// Map the preview file to its path inside the n8n container and write the Telegram caption.\nconst cfg = $('Config').first().json;\nconst out = [];\nfor (const it of $input.all()) {\n  const j = it.json;\n  const pkg = j.package || {};\n  const win = pkg.preview || j.render.output;\n  const root = String(cfg.CLIPS_ROOT || '').replace(/\\\\+$/, '');\n  let cpath = null;\n  if (root && win.toLowerCase().startsWith(root.toLowerCase())) {\n    cpath = (cfg.CONTAINER_CLIPS || '/data/clips') + win.slice(root.length).replace(/\\\\/g, '/');\n  }\n  const p = j.candidate.predict || {};\n  const mmss = s => { s = Math.max(0, Math.round(Number(s) || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };\n  const n = j.pick_count > 1 ? ` (${j.pick_index + 1} of ${j.pick_count})` : '';\n  const caption =\n    `🎬 Clip #${j.rank} ready${n} — ${j.original}\\n` +\n    `${mmss(j.start)} → ${mmss(j.end)} (${Math.round(j.duration)} s) · score ${p.total ?? '?'}/100 · ${j.render.encoder || 'encoded'}` +\n    ((j.candidate.signals || {}).voice_command ? `\\n🎤 you said \"${j.candidate.signals.voice_command.text}\" at ${mmss(j.candidate.signals.voice_command.at)}` : '') +\n    (p.notes && p.notes.visual && p.notes.visual.penalty ? `\\n⚠️ ${p.notes.visual.penalty}` : '') +\n    `\\nSaved: ${j.render.output}\\nCapCut package: ${pkg.package_dir || '-'}` +\n    (j.auto ? `\\n\\n⏳ Auto mode: uploading now, scheduled for ${j.publish_local || 'the next slot'} — link follows.` :\n    `\\n\\n👉 Reply \"post\" to upload it to YouTube Shorts (${cfg.POST_PRIVACY || 'public'})` +\n    (j.pick_count > 1 ? `, \"post ${j.rank}\" for just this one, \"post all\" for all ${j.pick_count}` : '') +\n    `, or \"keep\" to leave it in Ready. Long-press → Reply if several are open.`);\n  out.push({ json: { ...j, preview_container_path: cpath, preview_windows_path: win, caption } });\n}\nreturn out;\n"
       },
       "id": "e09476fb-6e8d-41f9-91fc-f4264740a675",
       "name": "Prepare Clip Message",
@@ -1487,7 +1517,7 @@
         "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
-        "text": "={{ $json.upload && $json.upload.url ? ('🚀 Posted clip #' + $json.rank + ' to YouTube Shorts (' + ($json.upload.privacy || 'public') + ')\\n' + $json.upload.title + '\\n' + $json.upload.url + '\\n\\nOpen it to review; change privacy in YouTube Studio if needed.') : ('❌ Upload of clip #' + $json.rank + ' failed: ' + ($json.upload && ($json.upload.error || ($json.upload.message)) ? String($json.upload.error || $json.upload.message).slice(0, 300) : 'unknown error') + '\\nThe clip is still in Ready: ' + $json.render.output) }}",
+        "text": "={{ $json.upload && $json.upload.url ? ((($json.upload.publish_at) ? ('📅 Scheduled clip #' + $json.rank + ' for ' + ($json.publish_local || $json.upload.publish_at) + ' (' + $('Config').first().json.AUTO_TZ + ')') : ('🚀 Posted clip #' + $json.rank + ' to YouTube Shorts (' + ($json.upload.privacy || 'public') + ')')) + '\\n' + $json.upload.title + '\\n' + $json.upload.url + '\\n' + 'Pull it or change the time in Studio: ' + ($json.upload.studio_url || 'https://studio.youtube.com')) : ('❌ Upload of clip #' + $json.rank + ' failed: ' + ($json.upload && ($json.upload.error || $json.upload.message) ? String($json.upload.error || $json.upload.message).slice(0, 300) : 'unknown error') + '\\nThe clip is still in Ready: ' + $json.render.output) }}",
         "additionalFields": {
           "appendAttribution": false,
           "parse_mode": "None"
@@ -1534,7 +1564,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// One log record per delivered clip, with the YouTube link when it was posted.\nconst delivered = $('Prepare Clip Message').all().map(it => it.json);\nlet uploads = [];\ntry { uploads = $('Attach Upload').all().map(it => it.json); } catch (e) { uploads = []; }\nconst byRank = {}; for (const u of uploads) byRank[u.rank] = u.upload || {};\nreturn delivered.map(d => ({ json: {\n  job_id: d.job_id, input: d.input, candidates: d.candidates,\n  approved: { rank: d.rank, start: d.start, end: d.end, reply: d.reply, pick_index: d.pick_index, pick_count: d.pick_count },\n  output: d.render.output, package_dir: (d.package || {}).package_dir,\n  posted: byRank[d.rank] && byRank[d.rank].url ? { url: byRank[d.rank].url, video_id: byRank[d.rank].video_id, privacy: byRank[d.rank].privacy, title: byRank[d.rank].title } : null,\n  status: byRank[d.rank] && byRank[d.rank].url ? 'posted' : 'delivered',\n} }));\n"
+        "jsCode": "// One log record per delivered clip, with the YouTube link when it was posted.\nconst delivered = $('Prepare Clip Message').all().map(it => it.json);\nlet uploads = [];\ntry { uploads = $('Attach Upload').all().map(it => it.json); } catch (e) { uploads = []; }\ntry { if (!uploads.length) uploads = $('Attach Auto Upload').all().map(it => it.json); } catch (e) {}\nconst byRank = {}; for (const u of uploads) byRank[u.rank] = u.upload || {};\nreturn delivered.map(d => ({ json: {\n  job_id: d.job_id, input: d.input, candidates: d.candidates,\n  approved: { rank: d.rank, start: d.start, end: d.end, reply: d.reply, pick_index: d.pick_index, pick_count: d.pick_count },\n  output: d.render.output, package_dir: (d.package || {}).package_dir,\n  posted: byRank[d.rank] && byRank[d.rank].url ? { url: byRank[d.rank].url, video_id: byRank[d.rank].video_id, privacy: byRank[d.rank].privacy, title: byRank[d.rank].title, publish_at: byRank[d.rank].publish_at || null } : null,\n  status: byRank[d.rank] && byRank[d.rank].url ? 'posted' : 'delivered',\n} }));\n"
       },
       "id": "55e9a2d4-54b2-453a-be26-fc5a40a14389",
       "name": "Build Log",
@@ -1589,6 +1619,185 @@
       "position": [
         7170,
         280
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f0cdac80-b047-4f7b-a08f-fc9bf3b1c380",
+              "leftValue": "={{ String($('Config').first().json.AUTO_POST).toLowerCase() === 'true' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e5355735-342c-4c2c-882c-4ce7967816a5",
+      "name": "Auto Mode?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3150,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// AUTO mode: choose the clips without a text review, in the same item shape Parse Reply produces.\n//   1. every \"clip it\" voice command (always),\n//   2. then heuristic picks with total >= AUTO_MIN_SCORE that passed the visual check,\n//   up to AUTO_MAX_PER_DAY, no overlapping windows. Each pick gets a publish slot (today's remaining\n//   AUTO_SLOTS in AUTO_TZ, then tomorrow's) so the Shorts go out spread through the day.\nconst cfg = $('Config').first().json;\nconst review = $('Build Review Message').first().json;\nconst cands = (review.candidates || []).slice();\nconst maxN = Number(cfg.AUTO_MAX_PER_DAY) || 4;\nconst minScore = Number(cfg.AUTO_MIN_SCORE) || 80;\nconst tz = cfg.AUTO_TZ || 'America/New_York';\n\nconst voice = cands.filter(c => (c.signals || {}).voice_command);\nconst rest = cands.filter(c => !(c.signals || {}).voice_command)\n  .filter(c => c.strong_moment && ((c.predict || {}).total || 0) >= minScore)\n  .filter(c => !(((c.predict || {}).notes || {}).visual || {}).window_bad)\n  .sort((a, b) => ((b.predict || {}).total || 0) - ((a.predict || {}).total || 0));\nconst overlaps = (a, b) => Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start)) / Math.max(1, Math.min(a.end - a.start, b.end - b.start)) > 0.25;\nconst chosen = [];\nfor (const c of [...voice, ...rest]) {\n  if (chosen.length >= maxN) break;\n  if (chosen.some(x => overlaps(x, c))) continue;\n  chosen.push(c);\n}\nif (!chosen.length) return [{ json: { action: 'none', job_id: review.job_id, job_dir: review.job_dir, original: review.original,\n  error: 'auto mode: nothing met the bar (no \"clip it\", nothing >= ' + minScore + '/100 that passed the visual check)' } }];\n\n// ---- publish slots in the configured time zone\nfunction tzOffsetMin(dateUtc) {           // minutes to ADD to local wall time to get UTC, for that instant\n  const f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });\n  const p = Object.fromEntries(f.formatToParts(dateUtc).map(x => [x.type, x.value]));\n  const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);\n  return (dateUtc.getTime() - asUtc) / 60000;\n}\nfunction localToUtc(y, m, d, hh, mm) {\n  let guess = new Date(Date.UTC(y, m, d, hh, mm));\n  guess = new Date(guess.getTime() + tzOffsetMin(guess) * 60000);\n  return new Date(Date.UTC(y, m, d, hh, mm) + tzOffsetMin(guess) * 60000);\n}\nconst now = new Date();\nconst nowLocal = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now).map(x => [x.type, x.value]));\nconst slots = String(cfg.AUTO_SLOTS || '10:00,13:00,16:00,19:00').split(',').map(s => s.trim()).filter(Boolean);\nconst times = [];\nfor (let dayOff = 0; times.length < chosen.length && dayOff < 7; dayOff++) {\n  for (const sl of slots) {\n    const [hh, mm] = sl.split(':').map(Number);\n    const t = localToUtc(+nowLocal.year, +nowLocal.month - 1, +nowLocal.day + dayOff, hh, mm);\n    if (t.getTime() > now.getTime() + 20 * 60000) times.push(t);   // YouTube needs the slot in the future\n    if (times.length >= chosen.length) break;\n  }\n}\nconst fmtLocal = t => new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(t);\n\nreturn chosen.map((cand, i) => ({ json: {\n  action: 'render', reply: 'auto', auto: true,\n  job_id: review.job_id, job_dir: review.job_dir, input: review.input, original: review.original, candidates: cands,\n  rank: cand.rank, start: cand.start, end: cand.end, duration: Number((cand.end - cand.start).toFixed(3)), candidate: cand,\n  pick_index: i, pick_count: chosen.length,\n  publish_at: times[i] ? times[i].toISOString().replace(/\\.\\d{3}Z$/, 'Z') : null,\n  publish_local: times[i] ? fmtLocal(times[i]) : null,\n  captions: cfg.CAPTIONS !== false, offset: cfg.RENDER_OFFSET, audio_mode: cfg.AUDIO_MODE, volume: cfg.VOLUME,\n} }));\n"
+      },
+      "id": "77178366-d966-460a-92f9-61f5ea69b662",
+      "name": "Auto Select",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5921c642-426c-478b-8ded-58445adc45e0",
+              "leftValue": "={{ $json.action === 'none' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "59eafbcd-e674-4b86-aefe-0c041b68273f",
+      "name": "Auto: Nothing?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3480,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Config').first().json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ '🤷 ' + $json.original + ': ' + $json.error + '. Nothing rendered.' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "None"
+        }
+      },
+      "id": "d9c8eec6-122b-4818-82ff-21d52c7c515d",
+      "name": "Telegram: Auto Nothing",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3660,
+        40
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2c636d1a-acc5-4aa5-b36b-5cde66a61873",
+              "leftValue": "={{ $json.auto === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6822113a-8f72-46e1-a2ec-7a6b4bf1f5ea",
+      "name": "Auto Upload?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        7360,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.RUNNER_URL }}/upload",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $json.job_id, output: $json.render.output, rank: $json.rank, candidate: $json.candidate, privacy: $('Config').first().json.POST_PRIVACY || 'public', game: $('Config').first().json.GAME || '', publish_at: $json.publish_at } }}",
+        "options": {
+          "timeout": 1000000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "482f4bb7-78f0-4ff0-aebb-6e4b9fb2c0b7",
+      "name": "Auto Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7560,
+        120
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pair scheduled-upload results with their clip (same order).\nconst picks = $('Confirm Delivery').all();\nreturn $input.all().map((it, i) => ({ json: { ...picks[i].json, upload: it.json } }));\n"
+      },
+      "id": "d6447075-257b-4e37-ab8c-a8786f18ac52",
+      "name": "Attach Auto Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7760,
+        120
       ]
     }
   ],
@@ -1754,7 +1963,7 @@
       "main": [
         [
           {
-            "node": "Review Channel",
+            "node": "Auto Mode?",
             "type": "main",
             "index": 0
           }
@@ -2158,7 +2367,94 @@
       "main": [
         [
           {
+            "node": "Auto Upload?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Mode?": {
+      "main": [
+        [
+          {
+            "node": "Auto Select",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Review Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Select": {
+      "main": [
+        [
+          {
+            "node": "Auto: Nothing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto: Nothing?": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Auto Nothing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Upload?": {
+      "main": [
+        [
+          {
+            "node": "Auto Upload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Init Post Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Upload": {
+      "main": [
+        [
+          {
+            "node": "Attach Auto Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Auto Upload": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Posted",
             "type": "main",
             "index": 0
           }

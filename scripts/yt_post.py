@@ -5,7 +5,10 @@ Run by the clipper runner (``POST /upload``) inside the pipeline's venv with cwd
 JSON request on stdin::
 
     {"clip": "C:\\...\\x_clip5_30s.mp4", "privacy": "public", "title": "", "hook": "...", "reason": "...",
-     "spoken": "...", "game": "", "original": "Replay_2026-10-29..."}
+     "spoken": "...", "game": "", "original": "Replay_2026-10-29...", "publish_at": "2026-11-06T15:00:00Z" | null}
+
+``publish_at`` (ISO 8601 UTC) schedules the Short: YouTube requires privacyStatus=private with publishAt and
+flips it to public itself at that time. Until then it is visible only in Studio (where it can be pulled).
 
 and prints one JSON line: ``{"video_id", "url", "title", "privacy"}``. Never deletes or edits anything else.
 """
@@ -55,10 +58,16 @@ def main() -> int:
                     "tags": yu.sanitize_tags(tags), "categoryId": getattr(yu, "GAMING_CATEGORY_ID", "20")},
         "status": {"privacyStatus": req.get("privacy", "public"), "selfDeclaredMadeForKids": False},
     }
+    publish_at = (req.get("publish_at") or "").strip()
+    if publish_at:
+        metadata["status"]["privacyStatus"] = "private"      # YouTube's rule for scheduled videos
+        metadata["status"]["publishAt"] = publish_at
     youtube = yu.get_authenticated_service()          # cached upload token; same as the daily task
     video_id = yu._upload_single(youtube, clip, metadata)
     print(json.dumps({"video_id": video_id, "url": f"https://youtu.be/{video_id}",
-                      "title": metadata["snippet"]["title"], "privacy": metadata["status"]["privacyStatus"]}))
+                      "title": metadata["snippet"]["title"], "privacy": metadata["status"]["privacyStatus"],
+                      "publish_at": metadata["status"].get("publishAt"),
+                      "studio_url": f"https://studio.youtube.com/video/{video_id}/edit"}))
     return 0
 
 

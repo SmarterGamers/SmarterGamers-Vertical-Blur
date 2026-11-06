@@ -402,6 +402,7 @@ class Stages:
             "spoken": spoken,
             "game": str(body.get("game") or self.cfg.GAME or ""),
             "original": self.meta(job_dir).get("original", output.stem),
+            "publish_at": str(body.get("publish_at") or ""),      # ISO UTC → scheduled (private until then)
         }
         script = self.cfg.REPO_DIR / "scripts" / "yt_post.py"
         try:
