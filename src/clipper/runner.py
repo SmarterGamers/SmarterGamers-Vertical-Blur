@@ -444,7 +444,7 @@ class Stages:
     def log(self, body: Dict[str, Any]) -> Dict[str, Any]:
         job_id = str(body.get("job_id", ""))
         record = {k: body.get(k) for k in ("job_id", "input", "candidates", "approved", "output",
-                                           "package_dir", "status")}
+                                           "package_dir", "status", "posted")}
         append_run_log(self.cfg.RUN_LOG, record)
         digest = None
         try:
