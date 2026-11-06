@@ -88,7 +88,7 @@ Unit tests (no ffmpeg needed): `python tests\test_clipper.py` and `python tests\
 - **Auto mode**: `AUTO_MIN_SCORE` 75 (the day-after sweep is the safety net). Publish slots are de-collided by the runner (`_free_slot`).
 - **Twitch**: `scripts/twitch_vods.py` downloads to `<Clips>/.twitch_tmp` (outside Inbox — the Inbox watcher is depth 0 and ignores dot-folders; earlier it fired on every download fragment). Set `SG_CLIPPER_INBOX=C:\SmarterGamers\Clips\Hold` to download without triggering a run. Twitch clips from VODs are UI-only (Helix create-clip is live-only): done through Chrome at the clipper's timestamps. Kick has no VOD clipping at all (clips only while live) and no VOD descriptions.
 - **Deploy**: `C:\SmarterGamers\deploy_workflow2.ps1` / `deploy_sweep.ps1` now restart the n8n container — the running instance caches active workflows, a CLI import alone is NOT picked up.
-- **Runner restart is self-service now**: `POST /restart {"pull":true}` (or `scripts\deploy_runner.ps1`) — the runner pulls, exits 3, and the scheduled task's restart-on-failure relaunches it within a minute. Nobody needs an elevated shell. `scripts/*.py` and `src/main.py`/`src/core/*` changes don't even need that (subprocess per render/upload).
+- **Runner restart is self-service now**: `POST /restart {"pull":true}` (or `scripts\deploy_runner.ps1`) — the runner pulls and exits 3, and the script relaunches it with `Start-ScheduledTask` (no elevation needed for the same user). Nobody needs an elevated shell. `scripts/*.py` and `src/main.py`/`src/core/*` changes don't even need that (subprocess per render/upload).
 
 ## If you change something
 
