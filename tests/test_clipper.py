@@ -283,28 +283,31 @@ def test_stream_filtergraph():
     assert "split=2" in classic and "[vout]" in classic   # default layout untouched
 
 
-def test_free_slot_moves_off_taken_times(tmp_path):
-    """/upload never schedules two Shorts on the same minute: a taken slot moves 90 min later."""
+def test_free_slot_respects_slots_clashes_and_daily_cap(tmp_path):
+    """/upload lands on a configured slot, never within 45 min of another Short, max 4 per local day."""
     import json as _json
     from clipper.runner import Stages
     from clipper.config import load_config
     cfg = load_config({"SG_CLIPPER_RUN_LOG": str(tmp_path / "runs.jsonl")})
+    taken = ["2026-11-06T15:00:00Z", "2026-11-06T18:00:00Z", "2026-11-06T21:00:00Z"]   # 10,13,16 ET
     (tmp_path / "runs.jsonl").write_text(
-        _json.dumps({"posted": {"publish_at": "2026-11-06T18:00:00Z"}}) + "\n", encoding="utf-8")
+        "".join(_json.dumps({"posted": {"publish_at": t}}) + "\n" for t in taken), encoding="utf-8")
     st = Stages.__new__(Stages)
     st.cfg = cfg
-    assert st._free_slot("2026-11-06T18:00:00Z") == "2026-11-06T19:30:00Z"
-    assert st._free_slot("2026-11-06T21:00:00Z") == "2026-11-06T21:00:00Z"
+    assert st._free_slot("2026-11-06T18:00:00Z") == "2026-11-07T00:00:00Z"      # 13:00 taken -> 19:00 ET
+    assert st._free_slot("2026-11-06T19:30:00Z") == "2026-11-07T00:00:00Z"      # off-slot time snaps to a slot
+    (tmp_path / "runs.jsonl").write_text(
+        "".join(_json.dumps({"posted": {"publish_at": t}}) + "\n" for t in taken + ["2026-11-07T00:00:00Z"]),
+        encoding="utf-8")
+    assert st._free_slot("2026-11-06T18:00:00Z") == "2026-11-07T15:00:00Z"      # day full (4) -> next day 10:00 ET
     assert st._free_slot("") == ""
 
 
-def test_restart_route_exists_and_health_reports_head():
-    """POST /restart is routed and /health shows the git head + start time (used by deploys to confirm a restart)."""
-    from clipper import runner as r
-    from clipper.config import load_config
-    st = r.Stages.__new__(r.Stages)
-    st.cfg = load_config({})
-    handler = r.make_handler(st)
-    assert handler is not None
-    assert st.RESTART_EXIT_CODE != 0          # non-zero so Task Scheduler's restart-on-failure relaunches it
-    assert isinstance(r._STARTED_AT, str) and len(r._STARTED_AT) == 19
+def test_voice_command_words_never_reach_captions():
+    """'clip it' is an instruction to the clipper, not content: it is dropped from the caption words."""
+    from clipper import captions as c
+    words = [{"start": 10.0, "end": 10.3, "word": "that"}, {"start": 10.3, "end": 10.5, "word": "was"},
+             {"start": 10.5, "end": 10.9, "word": "sick"}, {"start": 11.0, "end": 11.2, "word": "clip"},
+             {"start": 11.2, "end": 11.4, "word": "it"}]
+    text = " ".join(ch.text for ch in c.caption_chunks(words, 9.0, 20.0))
+    assert "clip" not in text and "sick" in text

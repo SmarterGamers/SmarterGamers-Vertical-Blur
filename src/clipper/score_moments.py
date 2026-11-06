@@ -217,6 +217,29 @@ VOICE_COMMAND_GAP = 1.0        # max seconds between "clip" and "it"
 VOICE_COMMAND_LEAD = 0.3       # the window ends this long before the command starts (command stays out of the clip)
 
 
+def strip_voice_commands(words: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The same word list without the "clip it" / "clip that" / "clipit" tokens themselves.
+
+    The command is an instruction to the clipper, not content: it must not be burned into captions, quoted
+    in descriptions, or fed to the title model (which happily produced "Clip It: The Wait")."""
+    out: List[Dict[str, Any]] = []
+    i = 0
+    norm = [re.sub(r"[^a-z\-]", "", str(w.get("word", "")).lower()) for w in words]
+    while i < len(words):
+        hit = 0
+        for pat in VOICE_COMMANDS:
+            n = len(pat)
+            if tuple(norm[i:i + n]) == pat:
+                hit = n
+                break
+        if hit:
+            i += hit
+            continue
+        out.append(words[i])
+        i += 1
+    return out
+
+
 def find_voice_commands(words: Sequence[Dict[str, Any]]) -> List[Dict[str, float]]:
     """Times at which the streamer says "clip it" / "clip that" / "clip this" (Whisper variants included).
 

@@ -295,7 +295,8 @@ class Stages:
             cc = dict(c)
             try:
                 s0, s1 = float(c.get("start", 0)), float(c.get("end", 0))
-                spoken = " ".join(w["word"] for w in words if s0 <= float(w["start"]) < s1)[:400]
+                spoken = " ".join(w["word"] for w in score_moments.strip_voice_commands(
+                    [w for w in words if s0 <= float(w["start"]) < s1]))[:400]
                 cc["llm"] = verdict_for_candidate(self.cfg.OLLAMA_URL, self.cfg.OLLAMA_MODEL, cc,
                                                   timeout=self.cfg.OLLAMA_TIMEOUT_SEC, spoken=spoken)
             except Exception as exc:  # never raise on LLM failure
@@ -416,19 +417,27 @@ class Stages:
         subprocess.run(cmd, capture_output=True, timeout=600, check=True)
         return preview
 
-    SLOT_STEP_MIN = 90          # when a publish slot is already taken, move later in these steps
     SLOT_CLASH_MIN = 45         # two Shorts closer than this are a clash
 
     def _free_slot(self, publish_at: str) -> str:
-        """Returns ``publish_at`` or, if a previous run already scheduled a Short within SLOT_CLASH_MIN of it,
-        the next free time (stepping SLOT_STEP_MIN later). Each run picks its slots from the clock only, so two
-        VODs processed the same day would otherwise land on the same minute. Blank stays blank."""
+        """The first configured publish slot at/after ``publish_at`` that is free and on a day that still has room.
+
+        n8n picks slots from the clock only, per run; this is where all runs are reconciled against
+        ``runs.jsonl``: no two Shorts within SLOT_CLASH_MIN of each other, at most ``MAX_PER_DAY`` per local
+        day (``PUBLISH_TZ``), only on ``PUBLISH_SLOTS`` times. Blank stays blank (post now).
+        """
         if not publish_at:
             return publish_at
         from datetime import datetime, timedelta, timezone
-        def parse(s):
+        try:
+            from zoneinfo import ZoneInfo
+            tz = ZoneInfo(self.cfg.PUBLISH_TZ)
+        except Exception:
+            tz = timezone.utc
+
+        def parse(v):
             try:
-                return datetime.fromisoformat(str(s).replace("Z", "+00:00")).astimezone(timezone.utc)
+                return datetime.fromisoformat(str(v).replace("Z", "+00:00")).astimezone(timezone.utc)
             except (ValueError, TypeError):
                 return None
         want = parse(publish_at)
@@ -437,18 +446,33 @@ class Stages:
         taken = []
         try:
             for line in self.cfg.RUN_LOG.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue
-                t = parse((json.loads(line).get("posted") or {}).get("publish_at"))
-                if t:
-                    taken.append(t)
+                if line.strip():
+                    t = parse((json.loads(line).get("posted") or {}).get("publish_at"))
+                    if t:
+                        taken.append(t)
         except (OSError, ValueError):
             pass
+        slots = []
+        for part in str(self.cfg.PUBLISH_SLOTS).split(","):
+            try:
+                hh, mm = part.strip().split(":")
+                slots.append((int(hh), int(mm)))
+            except ValueError:
+                continue
+        slots = sorted(slots) or [(10, 0), (13, 0), (16, 0), (19, 0)]
         clash = timedelta(minutes=self.SLOT_CLASH_MIN)
-        for _ in range(64):
-            if not any(abs(want - t) < clash for t in taken):
-                break
-            want += timedelta(minutes=self.SLOT_STEP_MIN)
+        day = want.astimezone(tz).date()
+        for _ in range(60):                                   # up to two months out
+            on_day = sum(1 for t in taken if t.astimezone(tz).date() == day)
+            if on_day < int(self.cfg.MAX_PER_DAY):
+                for hh, mm in slots:
+                    cand = datetime(day.year, day.month, day.day, hh, mm, tzinfo=tz).astimezone(timezone.utc)
+                    if cand < want:
+                        continue
+                    if any(abs(cand - t) < clash for t in taken):
+                        continue
+                    return cand.strftime("%Y-%m-%dT%H:%M:%SZ")
+            day += timedelta(days=1)
         return want.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # ---------------------------------------------------------------- POST /upload
@@ -472,7 +496,8 @@ class Stages:
         tj = job_dir / "transcript.json"
         words = transcribe_mod.load_words(tj) if tj.exists() else []
         start, end = float(candidate.get("start", 0)), float(candidate.get("end", 0))
-        spoken = " ".join(w["word"] for w in words if start <= w["start"] < end)[:300]
+        spoken = " ".join(w["word"] for w in score_moments.strip_voice_commands(
+            [w for w in words if start <= w["start"] < end]))[:300]
         req = {
             "clip": str(output), "privacy": privacy,
             "title": str(body.get("title") or "").strip(),

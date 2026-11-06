@@ -28,7 +28,7 @@ runner side (`src/clipper/config.py`, env-overridable). Defaults:
 | REVIEW_TIMEOUT_HOURS | `24` |
 | CAPTURES / CONTAINER_CAPTURES | `C:\Users\ultim\Videos\Captures` / `/data/captures` — second watched folder (ShadowPlay/Game Bar instant replays). Files there are never moved: ingest hard-links (or copies) them into Working |
 | AUTO_POST | `true` — skip the text review: render every "clip it" moment plus heuristic picks ≥ AUTO_MIN_SCORE that pass the visual check (max AUTO_MAX_PER_DAY, non-overlapping), upload each as a **scheduled** Short at the next AUTO_SLOTS time in AUTO_TZ (private until then — pull it in Studio), and send the clip video + link to Telegram. `false` = the two-step text review. |
-| AUTO_MAX_PER_DAY / AUTO_MIN_SCORE / AUTO_SLOTS / AUTO_TZ | `4` / `75` / `10:00,13:00,16:00,19:00` / `America/New_York` (75: the day-after sweep is the safety net for borderline picks) |
+| AUTO_MAX_PER_DAY / AUTO_MIN_SCORE / AUTO_SLOTS / AUTO_TZ | `4` / `75` / `10:00,13:00,16:00,19:00` / `America/New_York` (75: the day-after sweep is the safety net; the runner enforces the slots + a 4/day cap across ALL runs via `PUBLISH_SLOTS`/`PUBLISH_TZ`/`MAX_PER_DAY`) |
 | GAME | `""` — game name for the social copy; blank = "gameplay" (set per session if you want it in titles) |
 | BF6_CLIPPER_PATH | `C:\Users\ultim\Desktop\Projects\HistoryView.org\bf6_clipper.py` |
 | REPO_DIR | repo root (auto) |

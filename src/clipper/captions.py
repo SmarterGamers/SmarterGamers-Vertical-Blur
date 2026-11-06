@@ -117,8 +117,9 @@ def safe_zone_rect(layout: str = "blur") -> Tuple[int, int, int, int]:
 def caption_chunks(words: Sequence[Dict[str, Any]], clip_start: float, clip_end: float,
                    max_words: int = MAX_WORDS) -> List[CaptionChunk]:
     """Groups words inside [clip_start, clip_end) into <= ``max_words`` chunks, clip-relative times."""
-    inside = [w for w in sorted(words, key=lambda w: w["start"])
-              if clip_start <= w["start"] < clip_end and w["word"].strip()]
+    from clipper.score_moments import strip_voice_commands   # local import: score_moments imports nothing from here
+    inside = strip_voice_commands([w for w in sorted(words, key=lambda w: w["start"])
+                                   if clip_start <= w["start"] < clip_end and w["word"].strip()])
     chunks: List[CaptionChunk] = []
     buf: List[Dict[str, Any]] = []
 
