@@ -26,6 +26,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -50,6 +51,9 @@ from clipper.llm import OllamaError, verdict_for_candidate  # noqa: E402
 from predictor import score_clip  # noqa: E402
 
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+_STARTED_AT = time.strftime("%Y-%m-%dT%H:%M:%S")   # when this process came up (shown by /health)
 
 
 class StageError(Exception):
@@ -113,7 +117,17 @@ class Stages:
             "model": self.cfg.WHISPER_MODEL if fw else None,
             "python": str(self.cfg.PYTHON_EXE),
             "repo": str(self.cfg.REPO_DIR),
+            "head": self._git_head(),
+            "started": _STARTED_AT,
         }
+
+    def _git_head(self) -> Optional[str]:
+        try:
+            return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=str(self.cfg.REPO_DIR),
+                                  capture_output=True, text=True, timeout=30,
+                                  creationflags=_NO_WINDOW).stdout.strip() or None
+        except Exception:
+            return None
 
     # ---------------------------------------------------------------- POST /guard
     def guard(self, body: Dict[str, Any]) -> Dict[str, Any]:
@@ -485,6 +499,35 @@ class Stages:
             raise StageError("upload", f"uploader returned no JSON: {proc.stdout[-300:]}", None)
         return out
 
+    # ---------------------------------------------------------------- POST /restart
+    RESTART_EXIT_CODE = 3
+
+    def restart(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Restarts the runner so it picks up new code — without anyone touching Task Scheduler.
+
+        The scheduled task that hosts the runner is set to "restart on failure" (RestartCount 999, every
+        minute), so the process simply answers this request, optionally ``git pull --ff-only``s the repo
+        (``{"pull": true}``), and exits non-zero a moment later; Task Scheduler relaunches it under the same
+        account within ~1 min. Deploy scripts call this after pushing; Brian never has to run an elevated
+        Stop/Start-ScheduledTask again.
+        """
+        pulled = None
+        if body.get("pull"):
+            p = subprocess.run(["git", "pull", "--ff-only"], cwd=str(self.cfg.REPO_DIR), capture_output=True,
+                               text=True, encoding="utf-8", errors="replace", timeout=120, creationflags=_NO_WINDOW)
+            pulled = (p.stdout or p.stderr).strip()[-300:]
+            if p.returncode != 0:
+                raise StageError("restart", f"git pull failed: {pulled}", "fix the checkout, then POST /restart again")
+        head = self._git_head()
+
+        def _die() -> None:
+            time.sleep(1.5)                       # let the response flush
+            sys.stderr.write("[runner] restart requested -> exiting for Task Scheduler to relaunch\n")
+            os._exit(self.RESTART_EXIT_CODE)
+        threading.Thread(target=_die, daemon=True).start()
+        return {"restarting": True, "head": head, "pulled": pulled,
+                "note": "Task Scheduler relaunches the runner within ~1 min; poll GET /health"}
+
     # ---------------------------------------------------------------- POST /log
     def log(self, body: Dict[str, Any]) -> Dict[str, Any]:
         job_id = str(body.get("job_id", ""))
@@ -690,6 +733,7 @@ def make_handler(stages: Stages) -> type:
         "/score": stages.score, "/predict": stages.predict, "/ollama_verdict": stages.ollama_verdict,
         "/render": stages.render, "/package": stages.package, "/log": stages.log,
         "/claim_reply": stages.claim_reply, "/upload": stages.upload, "/sweep": stages.sweep, "/live_check": stages.live_check, "/twitch_sync": stages.twitch_sync,
+        "/restart": stages.restart,
     }
 
     class Handler(BaseHTTPRequestHandler):

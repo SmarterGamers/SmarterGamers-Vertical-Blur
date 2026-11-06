@@ -100,3 +100,5 @@ Review has two phases: (1) pick a candidate → render; (2) the clip is sent as 
 Voice command: saying **"clip it"** (also "clip that" / "clip this") on stream makes the 30 s before the words a candidate — always listed first, always the recommendation, marked `signals.voice_command {text, at}`. The command itself is left out of the clip (window ends 0.3 s before it). Several commands = several candidates on top of the usual five.
 
 Reply grammar parsed by n8n: `^(\d)(?:\s*(?:start|end)\s*([+-]?\d+(?:\.\d+)?)\s*s?\s*(earlier|later)?)*$|^(?:reject all|no|none|skip|skip all|reject)$` (case-insensitive).
+
+`POST /restart {"pull": true|false}` → `{"restarting": true, "head", "pulled"}` — optionally `git pull --ff-only`s the repo, then the runner exits with code 3; the hosting scheduled task (restart-on-failure, 1 min) relaunches it. `GET /health` now returns `head` (git) and `started` (process start time) so a deploy can confirm the new process is up. `scripts/deploy_runner.ps1` does restart + wait; no elevated shell needed.

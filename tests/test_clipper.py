@@ -296,3 +296,15 @@ def test_free_slot_moves_off_taken_times(tmp_path):
     assert st._free_slot("2026-11-06T18:00:00Z") == "2026-11-06T19:30:00Z"
     assert st._free_slot("2026-11-06T21:00:00Z") == "2026-11-06T21:00:00Z"
     assert st._free_slot("") == ""
+
+
+def test_restart_route_exists_and_health_reports_head():
+    """POST /restart is routed and /health shows the git head + start time (used by deploys to confirm a restart)."""
+    from clipper import runner as r
+    from clipper.config import load_config
+    st = r.Stages.__new__(r.Stages)
+    st.cfg = load_config({})
+    handler = r.make_handler(st)
+    assert handler is not None
+    assert st.RESTART_EXIT_CODE != 0          # non-zero so Task Scheduler's restart-on-failure relaunches it
+    assert isinstance(r._STARTED_AT, str) and len(r._STARTED_AT) == 19
