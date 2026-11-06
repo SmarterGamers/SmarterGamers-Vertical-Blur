@@ -179,7 +179,7 @@
             {
               "id": "14ca2cb8-f599-47b4-9162-984374f975af",
               "name": "AUTO_MIN_SCORE",
-              "value": "80",
+              "value": "75",
               "type": "string"
             },
             {
