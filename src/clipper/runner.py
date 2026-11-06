@@ -442,6 +442,53 @@ class Stages:
                                        output=body.get("output"), status=body.get("status"))
         return {"hash": digest}
 
+    # ---------------------------------------------------------------- POST /live_check
+    def live_check(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Returns posted clips whose scheduled publish time has passed and that were not announced yet.
+
+        Source: runs.jsonl ``posted`` blocks (``publish_at`` ISO UTC, or none = published immediately).
+        Marks what it returns in ``<LEDGER dir>/live_notified.json`` so each clip is announced once.
+        """
+        path = self.cfg.LEDGER.parent / "live_notified.json"
+        try:
+            done = set(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else set()
+        except (OSError, ValueError):
+            done = set()
+        now = time.time()
+        out: List[Dict[str, Any]] = []
+        seen = set()
+        try:
+            lines = self.cfg.RUN_LOG.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            lines = []
+        for line in lines:
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            posted = rec.get("posted") or {}
+            vid = posted.get("video_id")
+            if not vid or vid in done or vid in seen:
+                continue
+            pub = posted.get("publish_at")
+            if pub:
+                try:
+                    ts = time.mktime(time.strptime(pub.replace("Z", ""), "%Y-%m-%dT%H:%M:%S")) - time.timezone
+                except ValueError:
+                    ts = now
+                if ts > now:
+                    continue
+            seen.add(vid)
+            out.append({"video_id": vid, "url": posted.get("url"), "title": posted.get("title"),
+                        "publish_at": pub, "job_id": rec.get("job_id"), "rank": (rec.get("approved") or {}).get("rank"),
+                        "output": rec.get("output")})
+        if out and not body.get("dry_run"):
+            done |= {o["video_id"] for o in out}
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(sorted(done)), encoding="utf-8")
+            os.replace(tmp, path)
+        return {"live": out}
+
     # ---------------------------------------------------------------- POST /sweep
     def sweep(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """Day-after sweep: privatize under-performing Shorts the clipper posted (scripts/yt_sweep.py).
@@ -562,7 +609,7 @@ def make_handler(stages: Stages) -> type:
         "/guard": stages.guard, "/ingest": stages.ingest, "/transcribe": stages.transcribe,
         "/score": stages.score, "/predict": stages.predict, "/ollama_verdict": stages.ollama_verdict,
         "/render": stages.render, "/package": stages.package, "/log": stages.log,
-        "/claim_reply": stages.claim_reply, "/upload": stages.upload, "/sweep": stages.sweep,
+        "/claim_reply": stages.claim_reply, "/upload": stages.upload, "/sweep": stages.sweep, "/live_check": stages.live_check,
     }
 
     class Handler(BaseHTTPRequestHandler):

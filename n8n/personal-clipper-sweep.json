@@ -1,5 +1,5 @@
 {
-  "name": "Personal Clipper — Day-after Sweep",
+  "name": "Personal Clipper — Live links & Day-after Sweep",
   "nodes": [
     {
       "parameters": {
@@ -137,6 +137,143 @@
           "name": "Personal Clipper Bot"
         }
       }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "f4a046ba-57e8-4a18-a6dc-b11ef53b4c9f",
+      "name": "Every 5 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config (live)').first().json.RUNNER_URL }}/live_check",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {} }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "0227fd73-df4d-404c-9e28-65bfeb5d0d31",
+      "name": "Live check (runner)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        260
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per clip that just went live.\nconst r = $input.first().json || {};\nreturn (r.live || []).map(v => ({ json: { text: `🔴 LIVE now on YouTube Shorts: ${v.title || ''}\\n${v.url}\\n(clip #${v.rank || '?'} from ${v.job_id || ''})` } }));\n"
+      },
+      "id": "ea928631-aa9f-41e2-9c63-a05d97c6cef1",
+      "name": "Live items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Config (live)').first().json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "None"
+        }
+      },
+      "id": "fa015889-df4c-4dff-aa7b-7225dbd99f6f",
+      "name": "Telegram: Live",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        260
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "21fdecfd-276d-4a43-b63f-52c530cf02ec",
+              "name": "RUNNER_URL",
+              "value": "http://host.docker.internal:5690",
+              "type": "string"
+            },
+            {
+              "id": "eb78e9f6-398b-4114-8bd9-1be71011e465",
+              "name": "TELEGRAM_CHAT_ID",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "8d3f97e4-fd6e-4c30-a2d6-c5aaa5309051",
+              "name": "FLOOR_FRACTION",
+              "value": "0.25",
+              "type": "string"
+            },
+            {
+              "id": "77121b3b-df17-4ae1-ab00-42f5e9e36804",
+              "name": "MIN_AGE_HOURS",
+              "value": "20",
+              "type": "string"
+            },
+            {
+              "id": "9fc1ec1b-401d-47a9-8ad9-b99424b97819",
+              "name": "MAX_AGE_HOURS",
+              "value": "48",
+              "type": "string"
+            },
+            {
+              "id": "37db88ba-00b6-490a-a7fb-11ba6bb3b689",
+              "name": "DRY_RUN",
+              "value": "false",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6cc728e6-abc5-4baa-90f3-43aa2dc1aaa4",
+      "name": "Config (live)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        260
+      ]
     }
   ],
   "connections": {
@@ -178,6 +315,50 @@
         [
           {
             "node": "Telegram: Sweep Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 5 min": {
+      "main": [
+        [
+          {
+            "node": "Config (live)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config (live)": {
+      "main": [
+        [
+          {
+            "node": "Live check (runner)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Live check (runner)": {
+      "main": [
+        [
+          {
+            "node": "Live items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Live items": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Live",
             "type": "main",
             "index": 0
           }
