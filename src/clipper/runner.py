@@ -459,6 +459,24 @@ class Stages:
                                        output=body.get("output"), status=body.get("status"))
         return {"hash": digest}
 
+    # ---------------------------------------------------------------- POST /twitch_sync
+    def twitch_sync(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Starts scripts/twitch_vods.py detached (downloads can take 30+ min) and returns at once.
+
+        New VODs land in Inbox when complete; the Inbox watcher does the rest. Progress: twitch_sync.log.
+        """
+        script = self.cfg.REPO_DIR / "scripts" / "twitch_vods.py"
+        args = [str(self.cfg.PYTHON_EXE), "-X", "utf8", str(script),
+                "--channel", str(body.get("channel") or "smartergamers"),
+                "--max", str(int(body.get("max", 1)))]
+        if body.get("dry_run"):
+            args.append("--dry-run")
+        log_path = self.cfg.LEDGER.parent / "twitch_sync.log"
+        with log_path.open("a", encoding="utf-8") as lf:
+            subprocess.Popen(args, stdout=lf, stderr=subprocess.STDOUT, cwd=str(self.cfg.REPO_DIR),
+                             creationflags=_NO_WINDOW)
+        return {"started": True, "log": str(log_path)}
+
     # ---------------------------------------------------------------- POST /live_check
     def live_check(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """Returns posted clips whose scheduled publish time has passed and that were not announced yet.
@@ -626,7 +644,7 @@ def make_handler(stages: Stages) -> type:
         "/guard": stages.guard, "/ingest": stages.ingest, "/transcribe": stages.transcribe,
         "/score": stages.score, "/predict": stages.predict, "/ollama_verdict": stages.ollama_verdict,
         "/render": stages.render, "/package": stages.package, "/log": stages.log,
-        "/claim_reply": stages.claim_reply, "/upload": stages.upload, "/sweep": stages.sweep, "/live_check": stages.live_check,
+        "/claim_reply": stages.claim_reply, "/upload": stages.upload, "/sweep": stages.sweep, "/live_check": stages.live_check, "/twitch_sync": stages.twitch_sync,
     }
 
     class Handler(BaseHTTPRequestHandler):

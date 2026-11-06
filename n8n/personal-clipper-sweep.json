@@ -1,5 +1,5 @@
 {
-  "name": "Personal Clipper — Live links & Day-after Sweep",
+  "name": "Personal Clipper — Twitch VODs, Live links & Day-after Sweep",
   "nodes": [
     {
       "parameters": {
@@ -274,6 +274,105 @@
         220,
         260
       ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "ea557230-6807-4b0e-8a56-def1a558707f",
+      "name": "Daily 07:00 Twitch",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "21fdecfd-276d-4a43-b63f-52c530cf02ec",
+              "name": "RUNNER_URL",
+              "value": "http://host.docker.internal:5690",
+              "type": "string"
+            },
+            {
+              "id": "eb78e9f6-398b-4114-8bd9-1be71011e465",
+              "name": "TELEGRAM_CHAT_ID",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "8d3f97e4-fd6e-4c30-a2d6-c5aaa5309051",
+              "name": "FLOOR_FRACTION",
+              "value": "0.25",
+              "type": "string"
+            },
+            {
+              "id": "77121b3b-df17-4ae1-ab00-42f5e9e36804",
+              "name": "MIN_AGE_HOURS",
+              "value": "20",
+              "type": "string"
+            },
+            {
+              "id": "9fc1ec1b-401d-47a9-8ad9-b99424b97819",
+              "name": "MAX_AGE_HOURS",
+              "value": "48",
+              "type": "string"
+            },
+            {
+              "id": "37db88ba-00b6-490a-a7fb-11ba6bb3b689",
+              "name": "DRY_RUN",
+              "value": "false",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8aa78226-4031-4387-b602-f62ca24c66fa",
+      "name": "Config (twitch)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config (twitch)').first().json.RUNNER_URL }}/twitch_sync",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { channel: 'smartergamers', max: 1 } }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8de0bfc7-4e01-4c57-83dd-c6c142871bc0",
+      "name": "Twitch sync (runner)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        520
+      ],
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -359,6 +458,28 @@
         [
           {
             "node": "Telegram: Live",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 07:00 Twitch": {
+      "main": [
+        [
+          {
+            "node": "Config (twitch)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config (twitch)": {
+      "main": [
+        [
+          {
+            "node": "Twitch sync (runner)",
             "type": "main",
             "index": 0
           }
