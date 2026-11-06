@@ -402,6 +402,41 @@ class Stages:
         subprocess.run(cmd, capture_output=True, timeout=600, check=True)
         return preview
 
+    SLOT_STEP_MIN = 90          # when a publish slot is already taken, move later in these steps
+    SLOT_CLASH_MIN = 45         # two Shorts closer than this are a clash
+
+    def _free_slot(self, publish_at: str) -> str:
+        """Returns ``publish_at`` or, if a previous run already scheduled a Short within SLOT_CLASH_MIN of it,
+        the next free time (stepping SLOT_STEP_MIN later). Each run picks its slots from the clock only, so two
+        VODs processed the same day would otherwise land on the same minute. Blank stays blank."""
+        if not publish_at:
+            return publish_at
+        from datetime import datetime, timedelta, timezone
+        def parse(s):
+            try:
+                return datetime.fromisoformat(str(s).replace("Z", "+00:00")).astimezone(timezone.utc)
+            except (ValueError, TypeError):
+                return None
+        want = parse(publish_at)
+        if want is None:
+            return publish_at
+        taken = []
+        try:
+            for line in self.cfg.RUN_LOG.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                t = parse((json.loads(line).get("posted") or {}).get("publish_at"))
+                if t:
+                    taken.append(t)
+        except (OSError, ValueError):
+            pass
+        clash = timedelta(minutes=self.SLOT_CLASH_MIN)
+        for _ in range(64):
+            if not any(abs(want - t) < clash for t in taken):
+                break
+            want += timedelta(minutes=self.SLOT_STEP_MIN)
+        return want.strftime("%Y-%m-%dT%H:%M:%SZ")
+
     # ---------------------------------------------------------------- POST /upload
     def upload(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """Posts one rendered clip to YouTube Shorts. Only called after an explicit "post" reply.
@@ -433,7 +468,7 @@ class Stages:
             "spoken": spoken,
             "game": str(body.get("game") or self.cfg.GAME or ""),
             "original": self.meta(job_dir).get("original", output.stem),
-            "publish_at": str(body.get("publish_at") or ""),      # ISO UTC → scheduled (private until then)
+            "publish_at": self._free_slot(str(body.get("publish_at") or "")),   # ISO UTC → scheduled
         }
         script = self.cfg.REPO_DIR / "scripts" / "yt_post.py"
         try:

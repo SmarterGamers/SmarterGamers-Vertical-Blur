@@ -23,13 +23,32 @@ from smartergamers_pipeline import youtube_upload as yu  # noqa: E402  (the exis
 LIVE_CTA = getattr(yu, "LIVE_CTA_URL", "https://www.tiktok.com/@SmarterGamers/live")
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from clipper.captions import mask_profanity  # noqa: E402  (same word list as the burned captions)
+
+_TITLE_PREFIXES = re.compile(r"^(live stream|stream highlight|clip|short)s?\s*[:\-–—]\s*", re.I)
+
+
+def clean_title(t: str) -> str:
+    """Advertiser-safe, hooky title: no profanity (the word is dropped, not starred), no 'Live Stream:' prefix."""
+    words = []
+    for w in t.split():
+        masked = mask_profanity(w)
+        if masked != w:          # profane -> drop the word entirely (a starred word reads badly in a title)
+            continue
+        words.append(w)
+    t = " ".join(words)
+    t = _TITLE_PREFIXES.sub("", t).strip(" -:–—")
+    return re.sub(r"\s+", " ", t).strip()
+
+
 def make_title(req: dict) -> str:
     t = req.get("title") or req.get("llm_title") or ""
     if not t:
         hook = (req.get("hook") or "").strip().strip('"').rstrip(".!")
         reason = (req.get("reason") or "").split(" + ")[0].strip()
         t = hook if 8 <= len(hook) <= 70 else (reason[:1].upper() + reason[1:] if reason else "Stream highlight")
-    t = re.sub(r"\s+", " ", t).strip()
+    t = clean_title(t) or "Stream highlight"
     if "#shorts" not in t.lower():
         t = f"{t} #Shorts"
     return t[:100]
@@ -37,7 +56,7 @@ def make_title(req: dict) -> str:
 
 def make_description(req: dict) -> str:
     lines = []
-    spoken = (req.get("spoken") or "").strip()
+    spoken = " ".join(mask_profanity(w) for w in (req.get("spoken") or "").split()).strip()
     if spoken:
         lines.append(f'"{spoken[:200]}"')
     if req.get("game"):

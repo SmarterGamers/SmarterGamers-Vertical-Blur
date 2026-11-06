@@ -281,3 +281,18 @@ def test_stream_filtergraph():
     assert g.endswith("subtitles='C\\:/x/c.ass'[vout]")
     classic = eng.build_filtergraph(1080, 1920)
     assert "split=2" in classic and "[vout]" in classic   # default layout untouched
+
+
+def test_free_slot_moves_off_taken_times(tmp_path):
+    """/upload never schedules two Shorts on the same minute: a taken slot moves 90 min later."""
+    import json as _json
+    from clipper.runner import Stages
+    from clipper.config import load_config
+    cfg = load_config({"SG_CLIPPER_RUN_LOG": str(tmp_path / "runs.jsonl")})
+    (tmp_path / "runs.jsonl").write_text(
+        _json.dumps({"posted": {"publish_at": "2026-11-06T18:00:00Z"}}) + "\n", encoding="utf-8")
+    st = Stages.__new__(Stages)
+    st.cfg = cfg
+    assert st._free_slot("2026-11-06T18:00:00Z") == "2026-11-06T19:30:00Z"
+    assert st._free_slot("2026-11-06T21:00:00Z") == "2026-11-06T21:00:00Z"
+    assert st._free_slot("") == ""
