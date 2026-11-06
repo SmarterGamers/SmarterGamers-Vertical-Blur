@@ -82,6 +82,14 @@ C:\SmarterGamers\clipper-venv314\Scripts\python.exe C:\SmarterGamers\render_pick
 
 Unit tests (no ffmpeg needed): `python tests\test_clipper.py` and `python tests\test_predictor.py`.
 
+## Nov 6 2026 additions
+- **Stream layout**: 16:9 sources (Twitch VODs, OBS stream recordings) render as facecam-top / gameplay-centre / captions-under (`--layout stream`, auto-picked by the runner). Classic blur is unchanged for vertical sources. Constants in `src/core/ffmpeg_engine.py` (`STREAM_*`, `DEFAULT_FACECAM_BOX`); facecam box per channel in `Config FACECAM_BOX`.
+- **Captions**: one reaction emoji per chunk (`captions.EMOJI_RULES`, rendered with Segoe UI Emoji — monochrome under libass; colour would need PNG overlays), profanity masked in captions and in the upload description, dropped from titles.
+- **Auto mode**: `AUTO_MIN_SCORE` 75 (the day-after sweep is the safety net). Publish slots are de-collided by the runner (`_free_slot`).
+- **Twitch**: `scripts/twitch_vods.py` downloads to `<Clips>/.twitch_tmp` (outside Inbox — the Inbox watcher is depth 0 and ignores dot-folders; earlier it fired on every download fragment). Set `SG_CLIPPER_INBOX=C:\SmarterGamers\Clips\Hold` to download without triggering a run. Twitch clips from VODs are UI-only (Helix create-clip is live-only): done through Chrome at the clipper's timestamps. Kick has no VOD clipping at all (clips only while live) and no VOD descriptions.
+- **Deploy**: `C:\SmarterGamers\deploy_workflow2.ps1` / `deploy_sweep.ps1` now restart the n8n container — the running instance caches active workflows, a CLI import alone is NOT picked up.
+- **Runner restart** is still Brian-only (elevated `Stop/Start-ScheduledTask "SmarterGamers Clipper Runner"`); any change under `src/clipper/` needs it, `scripts/*.py` and `src/main.py`/`src/core/*` do not (subprocess per render/upload).
+
 ## If you change something
 
 Code → commit on `feat/n8n-personal-clipper` → `git pull` on the PC → restart the runner task (elevated) →

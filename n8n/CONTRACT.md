@@ -66,8 +66,9 @@ Runner-side helper (so n8n doesn't parse LLM output): calls Ollama `/api/chat` w
 (n8n may instead call Ollama directly via HTTP Request; both paths produce the same shape.)
 
 ### POST /render   {"job_id": "...", "rank": 2, "start": 118.4, "end": 148.4, "captions": true, "offset": -120, "audio_mode": "mix_all", "volume": 3.0}
-Stage 6. Writes `captions.ass` (safe-zone) from transcript words for [start,end], then runs
-`python src\main.py "<source>" --preset shorts --start S --duration D --audio-mode mix_all --volume V --offset O --hwaccel --captions "<captions.ass>" -o "<job_dir>"`,
+Stage 6. Writes `captions.ass` (safe-zone, word-highlight, one reaction emoji per chunk, profanity masked) from transcript words for [start,end], then runs
+`python src\main.py "<source>" --preset shorts --start S --duration D --audio-mode mix_all --volume V --offset O --hwaccel --layout L [--facecam x,y,w,h] --captions "<captions.ass>" -o "<job_dir>"`.
+Layout (`Config LAYOUT`, default `auto`): a landscape source (16:9 stream VOD / OBS recording) gets `stream` — facecam cut from `FACECAM_BOX` (fractions of the frame, default `0.03,0.50,0.31,0.43`) on top, the centre 4:3 of the gameplay filling the width below it (the overlay's own facecam rectangle blurred out), captions under the gameplay panel; a vertical source keeps the classic `blur` letterbox. The response carries `layout`.
 renames the result to `READY\<original>_clip<rank>_<len>s.mp4`. → `{"ok":true,"output":"<path>","cli":"<exact command>","encoder":"h264_nvenc|..."}`.
 
 ### POST /package   {"job_id": "...", "rank": 2, "output": "<path>", "candidate": {...}}
@@ -86,7 +87,7 @@ Stage 7. Appends one JSON line to RUN_LOG and marks the hash processed in LEDGER
 #2 ...
 Reply: a number (e.g. 2), several ("1 and 5" renders both), "2 start 5s earlier", "2 end 3s later", "no" (or "reject all"). No reply in 24 h = nothing rendered.
 ```
-`POST /upload {job_id, output, rank, candidate, privacy, game}` → `{video_id, url, title, privacy}` — posts ONE rendered clip to YouTube Shorts via the Shorts pipeline's own uploader/token (`scripts/yt_post.py` run in that venv). Only called after an explicit "post" reply. `POST /package` now also returns `preview` (the render, or a ≤45 MB 720p re-encode) for the Telegram video message.
+`POST /upload {job_id, output, rank, candidate, privacy, game, publish_at}` → `{video_id, url, title, privacy, publish_at, studio_url}` — posts ONE rendered clip. Titles come from Ollama/the hook and are scrubbed (profanity dropped, "Live Stream:" prefixes removed) in `scripts/yt_post.py`; the description's spoken quote is masked. `publish_at` is moved later (90-min steps) when `runs.jsonl` already has a Short within 45 min of it, so two VODs processed the same day never share a slot to YouTube Shorts via the Shorts pipeline's own uploader/token (`scripts/yt_post.py` run in that venv). Only called after an explicit "post" reply. `POST /package` now also returns `preview` (the render, or a ≤45 MB 720p re-encode) for the Telegram video message.
 
 Review has two phases: (1) pick a candidate → render; (2) the clip is sent as a Telegram video with its stats → reply `post` / `post 2` / `post all` / `keep`. Timeout in phase 2 keeps the clip in Ready, unposted.
 
