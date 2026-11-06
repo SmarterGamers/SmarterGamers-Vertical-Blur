@@ -184,6 +184,23 @@ class Stages:
     def transcribe(self, body: Dict[str, Any]) -> Dict[str, Any]:
         job_dir = self.job_dir(str(body.get("job_id", "")))
         meta = self.meta(job_dir)
+        # Re-runs of the same recording (same content hash) reuse the earlier transcript instead of
+        # spending another Whisper pass — a 5 h VOD is ~10 min of GPU time.
+        digest = meta.get("hash")
+        if digest and not (job_dir / "transcript.json").exists() and not body.get("force"):
+            for other in sorted(self.cfg.WORKING.glob("*"), key=lambda p: p.stat().st_mtime, reverse=True):
+                if other == job_dir or not (other / "transcript.json").exists():
+                    continue
+                try:
+                    if json.loads((other / "meta.json").read_text(encoding="utf-8")).get("hash") == digest:
+                        for name in ("transcript.json", "transcript.srt"):
+                            if (other / name).exists():
+                                shutil.copy2(other / name, job_dir / name)
+                        words = transcribe_mod.load_words(job_dir / "transcript.json")
+                        return {"transcript": str(job_dir / "transcript.json"), "srt": str(job_dir / "transcript.srt"),
+                                "words": len(words), "device": "cache", "reused_from": other.name}
+                except (OSError, ValueError):
+                    continue
         try:
             return transcribe_mod.transcribe_job(
                 job_dir, Path(meta["source"]),
