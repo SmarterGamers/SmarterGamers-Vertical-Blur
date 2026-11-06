@@ -90,4 +90,6 @@ Review has two phases: (1) pick a candidate → render; (2) the clip is sent as 
 
 `POST /claim_reply {update_id, job_id}` → `{claimed: bool, owner}` — first-come claim of a Telegram update so concurrent reviews never act on the same message (claims in `reply_claims.json`, 48 h). A Telegram reply-to (quote) of a review is accepted only by that review and needs no claim. n8n polls getUpdates with offset 0 (never confirms) so one review cannot hide a message from another.
 
+Voice command: saying **"clip it"** (also "clip that" / "clip this") on stream makes the 30 s before the words a candidate — always listed first, always the recommendation, marked `signals.voice_command {text, at}`. The command itself is left out of the clip (window ends 0.3 s before it). Several commands = several candidates on top of the usual five.
+
 Reply grammar parsed by n8n: `^(\d)(?:\s*(?:start|end)\s*([+-]?\d+(?:\.\d+)?)\s*s?\s*(earlier|later)?)*$|^(?:reject all|no|none|skip|skip all|reject)$` (case-insensitive).

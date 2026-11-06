@@ -212,6 +212,38 @@ def _penalties_for(words: Sequence[Dict[str, Any]], word_idx: Optional[int], sta
     return pens
 
 
+VOICE_COMMANDS = (("clip", "it"), ("clip", "that"), ("clip", "this"), ("clipit",), ("clippit",), ("clip-it",))
+VOICE_COMMAND_GAP = 1.0        # max seconds between "clip" and "it"
+VOICE_COMMAND_LEAD = 0.3       # the window ends this long before the command starts (command stays out of the clip)
+
+
+def find_voice_commands(words: Sequence[Dict[str, Any]]) -> List[Dict[str, float]]:
+    """Times at which the streamer says "clip it" / "clip that" / "clip this" (Whisper variants included).
+
+    Returns ``[{"start", "end", "text"}]`` per command, in time order. The clip the streamer means is the
+    stretch BEFORE the command (like a replay buffer), so callers window backwards from ``start``.
+    """
+    ws = sorted(words, key=lambda w: w["start"])
+    norm = [_norm_word(w["word"]) for w in ws]
+    found: List[Dict[str, float]] = []
+    i = 0
+    while i < len(ws):
+        hit = None
+        for pat in VOICE_COMMANDS:
+            n = len(pat)
+            if i + n <= len(ws) and tuple(norm[i:i + n]) == pat:
+                if n == 1 or (ws[i + n - 1]["start"] - ws[i]["end"]) <= VOICE_COMMAND_GAP:
+                    hit = n
+                    break
+        if hit:
+            found.append({"start": float(ws[i]["start"]), "end": float(ws[i + hit - 1]["end"]),
+                          "text": " ".join(norm[i:i + hit])})
+            i += hit
+        else:
+            i += 1
+    return found
+
+
 def score_moments(words: Sequence[Dict[str, Any]], rms: Sequence[float], duration: float,
                   target_len: float = 30.0, onsets: Optional[Sequence[float]] = None,
                   hop_s: float = HOP_S, v1_used: bool = False, top_n: int = TOP_N,
@@ -240,14 +272,9 @@ def score_moments(words: Sequence[Dict[str, Any]], rms: Sequence[float], duratio
 
     raw: List[Dict[str, Any]] = []
     seen_starts = set()
-    for s0 in starts:
-        start, widx = snap_start(words, s0)
-        start = min(start, max(0.0, duration - target_len))
-        key = round(start, 2)
-        if key in seen_starts:
-            continue
-        seen_starts.add(key)
-        end = start + target_len
+
+    def evaluate(start: float, widx: Optional[int], end: float) -> Dict[str, Any]:
+        """Score one window [start, end). Everything below is window-local."""
 
         win_words = _window_words(words, start, end)
         i0, i1 = int(start / hop_s), int(end / hop_s)
@@ -335,8 +362,8 @@ def score_moments(words: Sequence[Dict[str, Any]], rms: Sequence[float], duratio
         if pens:
             reason += f" (−{', '.join(pens)})"
 
-        raw.append({
-            "start": round(start, 2), "end": round(end, 2), "duration": round(target_len, 2),
+        return {
+            "start": round(start, 2), "end": round(end, 2), "duration": round(end - start, 2),
             "score": round(max(0.0, min(1.0, score)), 4), "reason": reason,
             "strong_moment": bool(strong),
             "signals": {
@@ -350,10 +377,37 @@ def score_moments(words: Sequence[Dict[str, Any]], rms: Sequence[float], duratio
                 "phrases": phrase_hits, "v1_used": bool(v1_used), "penalties": list(pens),
             },
             "penalties": list(pens),
-        })
+        }
+
+    for s0 in starts:
+        start, widx = snap_start(words, s0)
+        start = min(start, max(0.0, duration - target_len))
+        key = round(start, 2)
+        if key in seen_starts:
+            continue
+        seen_starts.add(key)
+        raw.append(evaluate(start, widx, start + target_len))
+
+    # "clip it" said on stream = the streamer's own replay button: the window BEFORE the command is a
+    # candidate no matter what the audio heuristics think, ranked first and marked strong.
+    voice: List[Dict[str, Any]] = []
+    for cmd in find_voice_commands(words):
+        end = max(0.0, min(duration, cmd["start"] - VOICE_COMMAND_LEAD))
+        start = max(0.0, end - target_len)
+        if end - start < 5.0:
+            continue
+        c = evaluate(start, None, end)
+        c["score"] = 1.0
+        c["strong_moment"] = True
+        c["penalties"] = [p for p in c["penalties"] if p != "no_action"]
+        c["signals"]["penalties"] = list(c["penalties"])
+        c["signals"]["voice_command"] = {"text": cmd["text"], "at": round(cmd["start"], 2)}
+        c["reason"] = f"you said '{cmd['text']}' at {fmt_ts(cmd['start'])} — this is the {int(round(end - start))} s before it" + \
+                      (f" + {c['reason']}" if c["reason"] else "")
+        voice.append(c)
 
     raw.sort(key=lambda c: c["score"], reverse=True)
-    picked = non_max_suppress(raw, max_overlap=0.25, top_n=top_n)
+    picked = non_max_suppress(voice + raw, max_overlap=0.25, top_n=top_n + len(voice))
     for i, c in enumerate(picked, 1):
         c["rank"] = i
     return picked

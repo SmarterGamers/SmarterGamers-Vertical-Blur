@@ -199,6 +199,33 @@ def test_v1_firefight_event_makes_window_strong():
     print("[OK] v1 firefight event marks the window as a strong moment")
 
 
+def test_clip_it_voice_command():
+    """Saying "clip it" makes the 30 s before it a strong, first-ranked candidate the predictor recommends."""
+    from predictor.score_clip import predict_all
+    from clipper.score_moments import find_voice_commands
+    words = synthetic_transcript(duration=150.0, burst_at=-100)      # calm talk, no action anywhere
+    # streamer says "clip it" at 100.0-100.6 s
+    words = [w for w in words if not (99.5 <= w["start"] <= 101.0)]
+    words += [{"start": 100.0, "end": 100.3, "word": "Clip"}, {"start": 100.35, "end": 100.6, "word": "it!"}]
+    rms = [0.08] * int(150.0 / HOP)
+    cmds = find_voice_commands(words)
+    assert len(cmds) == 1 and cmds[0]["text"] == "clip it" and abs(cmds[0]["start"] - 100.0) < 1e-6
+    cands = score_moments(words, rms, 150.0, target_len=30)
+    top = cands[0]
+    assert top["rank"] == 1 and top["strong_moment"] and top["signals"]["voice_command"]["text"] == "clip it"
+    assert abs(top["end"] - 99.7) < 0.01 and abs(top["start"] - 69.7) < 0.01, top
+    assert "you said 'clip it' at 1:40" in top["reason"], top["reason"]
+    assert all(not c["strong_moment"] for c in cands[1:]), "plain chat windows stay non-strong"
+    out, rec = predict_all(cands, words, rms, hop_s=HOP, target_len=30)
+    assert rec == 1, f"voice command must be the recommendation, got {rec}"
+    # Whisper variants and 'clip that' / 'clip this'
+    for variant in (["clipit"], ["clip", "that"], ["Clip,", "this"]):
+        ws = [{"start": 10 + 0.3 * i, "end": 10.25 + 0.3 * i, "word": v} for i, v in enumerate(variant)]
+        assert find_voice_commands(ws), variant
+    assert not find_voice_commands([{"start": 1, "end": 1.2, "word": "clip"}, {"start": 3.0, "end": 3.2, "word": "it"}]), "too far apart"
+    print("[OK] 'clip it' -> the 30 s before it is candidate #1, strong, and the recommendation")
+
+
 if __name__ == "__main__":
     test_score_moments_ranks_burst_first()
     test_top5_do_not_overlap()
@@ -209,4 +236,5 @@ if __name__ == "__main__":
     test_filtergraph_with_and_without_captions()
     test_talk_only_vod_is_not_a_strong_moment()
     test_v1_firefight_event_makes_window_strong()
+    test_clip_it_voice_command()
     print("\nALL CLIPPER TESTS PASSED SUCCESSFULLY!")

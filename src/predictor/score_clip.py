@@ -342,10 +342,19 @@ def predict_all(candidates: Sequence[Dict[str, Any]], words: Sequence[Dict[str, 
             cc["predict"]["biggest_fix"] = "no game action in this window — not worth clipping as a highlight"
         if vis.get("window_bad"):
             cc["strong_moment"] = False      # a menu with gunfire audio behind it is still a menu
+        voice = (c.get("signals") or {}).get("voice_command")
+        if voice:
+            # The streamer asked for this one on stream: it is the recommendation, whatever the score says.
+            cc["strong_moment"] = True
+            cc["predict"]["voice_command"] = voice
+            if vis.get("tail_is_bad") or vis.get("window_bad"):
+                cc["predict"]["biggest_fix"] = "you asked for this one — but it ends on a menu/static screen; nudge the end earlier"
         out.append(cc)
-        eligible = cc.get("strong_moment", True) and cc["predict"]["total"] >= MIN_RECOMMEND_TOTAL
-        if eligible and cc["predict"]["total"] > best_total:
-            best_total, best_rank = cc["predict"]["total"], cc.get("rank")
+        eligible = cc.get("strong_moment", True) and (voice or cc["predict"]["total"] >= MIN_RECOMMEND_TOTAL)
+        # a voice command outranks any score; among several, the highest-scoring one wins
+        rank_key = cc["predict"]["total"] + (1000 if voice else 0)
+        if eligible and rank_key > best_total:
+            best_total, best_rank = rank_key, cc.get("rank")
     return out, best_rank
 
 
