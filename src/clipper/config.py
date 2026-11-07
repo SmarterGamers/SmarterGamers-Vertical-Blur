@@ -44,6 +44,7 @@ class ClipperConfig:
     # uploader + OAuth token of the Shorts pipeline; nothing is duplicated and no new credential is created.
     YT_PIPELINE_DIR: Path = Path(r"C:\Users\ultim\Desktop\Projects\SmarterGamers\smartergamers_antigravity")
     YT_PYTHON: Path = Path(r"C:\Users\ultim\Desktop\Projects\SmarterGamers\smartergamers_antigravity\.venv\Scripts\python.exe")
+    SOCIAL_CROSSPOST: bool = True      # queue each Short for TikTok + Facebook (scripts/social_post.py) once it is live
     POST_PRIVACY: str = "public"       # public | unlisted | private — what "post" publishes as
     PREVIEW_MAX_MB: int = 45           # Telegram bot uploads are capped at 50 MB; previews are re-encoded under this
 

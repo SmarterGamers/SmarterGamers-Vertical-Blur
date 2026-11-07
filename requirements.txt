@@ -14,3 +14,4 @@ windnd>=1.0.7
 yt-dlp>=2026.10.26        # Personal Clipper: pull own Twitch past broadcasts into Inbox (scripts/twitch_vods.py)
 tzdata>=2024.1          # zoneinfo database for Windows (publish-slot time zone in the runner)
 tkinterdnd2>=0.4.2       # Clipper Drop app: drag-and-drop onto the window (optional; buttons work without it)
+playwright>=1.48          # scripts/social_post.py: post Shorts to TikTok + the Facebook Page through a real Chrome window (free)

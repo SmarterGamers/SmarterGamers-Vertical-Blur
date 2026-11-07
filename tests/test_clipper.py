@@ -365,3 +365,36 @@ def test_twitch_sync_passes_rapid_flag(tmp_path, monkeypatch):
     monkeypatch.setattr(_sp, "Popen", lambda args, **kw: seen.setdefault("args", args))
     st.twitch_sync({"rapid": True})
     assert "--rapid" in seen["args"]
+
+
+def test_social_caption_and_queue(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("social_post", Path(__file__).resolve().parent.parent / "scripts" / "social_post.py")
+    sp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sp)
+    cap = sp.build_caption("Drone Kill Explosion in Call of Duty! #Shorts", "twitch_v1_CallOfDuty_Forza")
+    assert "#Shorts" not in cap and "#callofduty" in cap and "#forzahorizon6" in cap and cap.endswith("#smartergamers")
+    assert sp.build_caption("100K Night Drift in Forza Horizon #Shorts", "", "facebook") == \
+        "100K Night Drift in Forza Horizon #forzahorizon6 #forza #gaming #smartergamers"
+    q = tmp_path / "q.json"
+    assert sp.enqueue(q, [{"video_id": "a", "output": "a.mp4", "title": "A"}, {"video_id": "a", "output": "a.mp4"}]) == 1
+    assert sp.enqueue(q, [{"video_id": "a", "output": "a.mp4"}, {"video_id": "b", "output": "b.mp4"}]) == 1
+    queue = sp.load_json(q, [])
+    posted = {"a:tiktok": {"ok": True}, "b:facebook": {"ok": False, "attempts": 3}}
+    assert [(i["video_id"], p) for i, p in sp.pending(queue, posted)] == [("a", "facebook"), ("b", "tiktok")]
+
+
+def test_live_check_queues_social(tmp_path):
+    import json as _json
+    from clipper.runner import Stages
+    from clipper.config import load_config
+    cfg = load_config({"SG_CLIPPER_RUN_LOG": str(tmp_path / "runs.jsonl"), "SG_CLIPPER_LEDGER": str(tmp_path / "p.json"),
+                       "SG_CLIPPER_INBOX": str(tmp_path / "Inbox")})
+    (tmp_path / "runs.jsonl").write_text(_json.dumps({"job_id": "j", "input": r"C:\x\twitch_v1_Forza.mp4", "output": "c.mp4",
+                                                      "posted": {"video_id": "v1", "title": "T"}}) + "\n", encoding="utf-8")
+    st = Stages.__new__(Stages)
+    st.cfg = cfg
+    r = st.live_check({})
+    assert r["social_queued"] == 1 and st.live_check({})["social_queued"] == 0
+    q = _json.loads((tmp_path / "social_queue.json").read_text(encoding="utf-8"))
+    assert q == [{"video_id": "v1", "output": "c.mp4", "title": "T", "source": "twitch_v1_Forza"}]

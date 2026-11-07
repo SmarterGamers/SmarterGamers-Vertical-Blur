@@ -703,13 +703,36 @@ class Stages:
             seen.add(vid)
             out.append({"video_id": vid, "url": posted.get("url"), "title": posted.get("title"),
                         "publish_at": pub, "job_id": rec.get("job_id"), "rank": (rec.get("approved") or {}).get("rank"),
-                        "output": rec.get("output")})
+                        "output": rec.get("output"), "source": os.path.splitext(str(rec.get("input") or "").replace("\\", "/").rsplit("/", 1)[-1])[0]})
+        queued = 0
         if out and not body.get("dry_run"):
             done |= {o["video_id"] for o in out}
             tmp = path.with_suffix(".tmp")
             tmp.write_text(json.dumps(sorted(done)), encoding="utf-8")
             os.replace(tmp, path)
-        return {"live": out}
+            if self.cfg.SOCIAL_CROSSPOST:
+                queued = self._queue_social(out)
+        return {"live": out, "social_queued": queued}
+
+    def _queue_social(self, items: List[Dict[str, Any]]) -> int:
+        """Hands just-live Shorts to scripts/social_post.py (TikTok + Facebook) via <Clips>/social_queue.json."""
+        qpath = self.cfg.INBOX.parent / "social_queue.json"
+        try:
+            q = json.loads(qpath.read_text(encoding="utf-8-sig")) if qpath.exists() else []
+        except (OSError, ValueError):
+            q = []
+        have = {x.get("video_id") for x in q}
+        added = 0
+        for it in items:
+            if it.get("video_id") not in have and it.get("output"):
+                q.append({k: it.get(k) for k in ("video_id", "output", "title", "source")})
+                have.add(it["video_id"])
+                added += 1
+        if added:
+            tmp = qpath.with_suffix(".tmp")
+            tmp.write_text(json.dumps(q, indent=1, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, qpath)
+        return added
 
     # ---------------------------------------------------------------- POST /sweep
     def sweep(self, body: Dict[str, Any]) -> Dict[str, Any]:
