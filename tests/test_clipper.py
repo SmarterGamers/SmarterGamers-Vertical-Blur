@@ -324,3 +324,44 @@ def test_free_slot_reserves_within_one_run(tmp_path):
     st.cfg = cfg
     got = {st._free_slot("2026-11-06T15:00:00Z") for _ in range(3)}
     assert len(got) == 3
+
+
+def test_stream_watch_triggers_rapid_sync_once_after_grace(tmp_path, monkeypatch):
+    """A stream that stays offline for the grace period starts one rapid /twitch_sync; a reconnect doesn't."""
+    import json as _json
+    from datetime import datetime, timedelta, timezone
+    from clipper.runner import Stages
+    from clipper.config import load_config
+    cfg = load_config({"SG_CLIPPER_LEDGER": str(tmp_path / "processed.json")})
+    st = Stages.__new__(Stages)
+    st.cfg = cfg
+    synced = []
+    st.twitch_sync = lambda body: synced.append(body) or {"started": True}
+    status = {"v": {"id": "s1", "started_at": "2026-11-07T01:00:00Z"}}
+    st._twitch_live = lambda channel: status["v"]
+    assert st.stream_watch({})["live"] is True
+    status["v"] = None
+    assert st.stream_watch({})["ended"] is False                    # first offline poll: start the grace clock
+    status["v"] = {"id": "s1", "started_at": "2026-11-07T01:00:00Z"}
+    st.stream_watch({})                                             # reconnected: clock cleared
+    status["v"] = None
+    st.stream_watch({})
+    state_path = tmp_path / "stream_state.json"
+    state = _json.loads(state_path.read_text(encoding="utf-8"))
+    state["offline_since"] = (datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat()
+    state_path.write_text(_json.dumps(state), encoding="utf-8")
+    r = st.stream_watch({})
+    assert r["ended"] and r["sync_started"] and synced == [{"channel": "smartergamers", "max": 1, "rapid": True}]
+    assert st.stream_watch({})["ended"] is False and len(synced) == 1   # each stream triggers once
+
+
+def test_twitch_sync_passes_rapid_flag(tmp_path, monkeypatch):
+    import subprocess as _sp
+    from clipper.runner import Stages
+    from clipper.config import load_config
+    st = Stages.__new__(Stages)
+    st.cfg = load_config({"SG_CLIPPER_LEDGER": str(tmp_path / "processed.json")})
+    seen = {}
+    monkeypatch.setattr(_sp, "Popen", lambda args, **kw: seen.setdefault("args", args))
+    st.twitch_sync({"rapid": True})
+    assert "--rapid" in seen["args"]

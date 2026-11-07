@@ -592,11 +592,77 @@ class Stages:
                 "--max", str(int(body.get("max", 1)))]
         if body.get("dry_run"):
             args.append("--dry-run")
+        if body.get("rapid"):
+            args += ["--rapid"]            # name the file live_*.mp4 so Auto Select posts the top picks at once
         log_path = self.cfg.LEDGER.parent / "twitch_sync.log"
         with log_path.open("a", encoding="utf-8") as lf:
             subprocess.Popen(args, stdout=lf, stderr=subprocess.STDOUT, cwd=str(self.cfg.REPO_DIR),
                              creationflags=_NO_WINDOW)
         return {"started": True, "log": str(log_path)}
+
+    # ---------------------------------------------------------------- POST /stream_watch
+    STREAM_END_GRACE_MIN = 10      # offline this long before we call the stream over (covers reconnects)
+    TWITCH_WEB_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"   # Twitch's public web client id, not a secret
+
+    def _twitch_live(self, channel: str) -> Optional[Dict[str, Any]]:
+        """``{"id", "started_at"}`` while ``channel`` is live on Twitch, ``None`` when offline.
+
+        Raises StageError when Twitch can't be reached, so a network blip never reads as "stream ended".
+        """
+        import urllib.request
+        q = json.dumps({"query": '{ user(login: "%s") { stream { id createdAt } } }' % channel}).encode()
+        req = urllib.request.Request("https://gql.twitch.tv/gql", data=q, method="POST",
+                                     headers={"Client-Id": self.TWITCH_WEB_CLIENT_ID,
+                                              "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data = json.loads(r.read().decode("utf-8"))
+            user = (data.get("data") or {}).get("user")
+        except Exception as exc:  # noqa: BLE001
+            raise StageError("stream_watch", f"Twitch status check failed: {exc}", "retries on the next poll")
+        if user is None:
+            raise StageError("stream_watch", f"Twitch user not found: {channel}", "check the channel name")
+        s = user.get("stream")
+        return {"id": s.get("id"), "started_at": s.get("createdAt")} if s else None
+
+    def stream_watch(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Polled every 5 min by n8n. When a Twitch stream has been over for STREAM_END_GRACE_MIN, starts
+        ``/twitch_sync`` for that VOD in rapid mode: the file arrives in Inbox as ``live_twitch_*.mp4`` and the
+        clipper's Auto Select posts its top ``AUTO_RAPID`` (3) picks immediately, the rest on the normal slots.
+
+        State in ``<LEDGER dir>/stream_state.json`` so each stream triggers exactly once, across restarts.
+        """
+        from datetime import datetime, timezone
+        channel = str(body.get("channel") or "smartergamers")
+        path = self.cfg.LEDGER.parent / "stream_state.json"
+        try:
+            state = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except (OSError, ValueError):
+            state = {}
+        now = datetime.now(timezone.utc)
+        live = self._twitch_live(channel)
+        result: Dict[str, Any] = {"live": bool(live), "ended": False, "sync_started": False}
+        if live:
+            if state.get("stream_id") != live["id"]:
+                state = {"stream_id": live["id"], "started_at": live["started_at"]}
+            state.update(live=True, last_seen=now.isoformat(), offline_since=None)
+        elif state.get("live"):
+            off = state.get("offline_since")
+            if not off:
+                state["offline_since"] = now.isoformat()
+            elif (now - datetime.fromisoformat(off)).total_seconds() >= self.STREAM_END_GRACE_MIN * 60:
+                state.update(live=False, ended_at=state.get("last_seen"), synced_at=now.isoformat())
+                result["ended"] = True
+                result["stream_id"] = state.get("stream_id")
+                result["started_at"] = state.get("started_at")
+                if not body.get("dry_run"):
+                    self.twitch_sync({"channel": channel, "max": 1, "rapid": True})
+                    result["sync_started"] = True
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, indent=1), encoding="utf-8")
+        os.replace(tmp, path)
+        result["state"] = state
+        return result
 
     # ---------------------------------------------------------------- POST /live_check
     def live_check(self, body: Dict[str, Any]) -> Dict[str, Any]:
@@ -765,7 +831,7 @@ def make_handler(stages: Stages) -> type:
         "/guard": stages.guard, "/ingest": stages.ingest, "/transcribe": stages.transcribe,
         "/score": stages.score, "/predict": stages.predict, "/ollama_verdict": stages.ollama_verdict,
         "/render": stages.render, "/package": stages.package, "/log": stages.log,
-        "/claim_reply": stages.claim_reply, "/upload": stages.upload, "/sweep": stages.sweep, "/live_check": stages.live_check, "/twitch_sync": stages.twitch_sync,
+        "/claim_reply": stages.claim_reply, "/upload": stages.upload, "/sweep": stages.sweep, "/live_check": stages.live_check, "/stream_watch": stages.stream_watch, "/twitch_sync": stages.twitch_sync,
         "/restart": stages.restart,
     }
 

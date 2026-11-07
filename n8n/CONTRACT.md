@@ -93,7 +93,9 @@ Review has two phases: (1) pick a candidate → render; (2) the clip is sent as 
 
 `POST /sweep {dry_run, floor_fraction, min_age_hours, max_age_hours}` → `{baseline_views, checked, privatized, kept, skipped}` — day-after sweep (scripts/yt_sweep.py, manage token): Shorts the clipper posted 20–48 h ago that have < floor_fraction × (median views of recent Shorts) AND 0 likes are set to private (never deleted). Driven by `n8n/personal-clipper-sweep.json` (daily 09:00 ET, Telegram summary).
 
-`POST /twitch_sync {channel, max, dry_run}` → `{started, log}` — downloads new Twitch past broadcasts of the channel into Inbox (scripts/twitch_vods.py, yt-dlp, ledger twitch_vods.json) in the background; the Inbox watcher then runs the normal flow. Daily 07:00 ET from the sweep workflow.
+`POST /twitch_sync {channel, max, dry_run}` → `{started, log}` — downloads new Twitch past broadcasts of the channel into Inbox (scripts/twitch_vods.py, yt-dlp, ledger twitch_vods.json) in the background; the Inbox watcher then runs the normal flow. Daily 07:00 ET from the sweep workflow. `rapid: true` names the file `live_twitch_*.mp4`.
+
+`POST /stream_watch {channel, dry_run}` → `{live, ended, sync_started, state}` — polled every 5 min by the sweep workflow. Checks Twitch's public live status (no login, no secret); once a stream has been offline for 10 min it starts `/twitch_sync {max: 1, rapid: true}` exactly once (state in `stream_state.json`). **Auto Select** treats a `live_*` source as a just-ended stream: its top `AUTO_RAPID` (default 3) picks are posted public immediately, back to back (topped up with the next-best strong moments that passed the visual check if fewer than 3 cleared `AUTO_MIN_SCORE`); anything beyond is scheduled on `AUTO_SLOTS` as usual.
 
 `POST /claim_reply {update_id, job_id}` → `{claimed: bool, owner}` — first-come claim of a Telegram update so concurrent reviews never act on the same message (claims in `reply_claims.json`, 48 h). A Telegram reply-to (quote) of a review is accepted only by that review and needs no claim. n8n polls getUpdates with offset 0 (never confirms) so one review cannot hide a message from another.
 

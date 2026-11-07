@@ -373,6 +373,70 @@
         520
       ],
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config (live)').first().json.RUNNER_URL }}/stream_watch",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { channel: 'smartergamers' } }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "name": "Stream watch (runner)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        480
+      ],
+      "id": "5f1c0f6e-7a51-4b8e-9d3a-6c2f0e9b1a01",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Telegram heads-up once per finished stream.\nconst r = $input.first().json || {};\nif (!r.ended) return [];\nreturn [{ json: { text: '\\ud83c\\udfac Stream over \\u2014 pulling the VOD now. The top 3 clips post to YouTube Shorts as soon as they render (about 30\\u201360 min), the rest go on the normal schedule.' } }];\n"
+      },
+      "name": "Stream ended?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        480
+      ],
+      "id": "5f1c0f6e-7a51-4b8e-9d3a-6c2f0e9b1a02"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Config (live)').first().json.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "None"
+        }
+      },
+      "name": "Telegram: Stream Ended",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        480
+      ],
+      "id": "5f1c0f6e-7a51-4b8e-9d3a-6c2f0e9b1a03",
+      "credentials": {
+        "telegramApi": {
+          "name": "Personal Clipper Bot"
+        }
+      }
     }
   ],
   "connections": {
@@ -438,6 +502,11 @@
             "node": "Live check (runner)",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Stream watch (runner)",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -480,6 +549,28 @@
         [
           {
             "node": "Twitch sync (runner)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stream watch (runner)": {
+      "main": [
+        [
+          {
+            "node": "Stream ended?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stream ended?": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Stream Ended",
             "type": "main",
             "index": 0
           }

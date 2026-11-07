@@ -7,7 +7,7 @@ moments + best picks → scheduled Shorts). Downloads go to ``<Clips root>/.twit
 never inside it) and are moved in only when complete, so the watcher never sees fragments or a half-written file.
 
 Usage (run by the runner's /twitch_sync, or by hand):
-    python scripts/twitch_vods.py [--channel smartergamers] [--max 1] [--dry-run]
+    python scripts/twitch_vods.py [--channel smartergamers] [--max 1] [--rapid] [--dry-run]
 """
 from __future__ import annotations
 
@@ -51,6 +51,8 @@ def main() -> int:
     ap.add_argument("--list-limit", type=int, default=5)
     ap.add_argument("--min-minutes", type=float, default=20.0)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--rapid", action="store_true",
+                    help="just-ended stream: name it live_twitch_*.mp4 so the clipper posts its top picks at once")
     ap.add_argument("--skip", default="", help="comma-separated VOD ids to mark as done without downloading")
     args = ap.parse_args()
 
@@ -86,7 +88,7 @@ def main() -> int:
     done = 0
     for v in new[: args.max]:
         safe = re.sub(r"[^A-Za-z0-9._-]+", "_", v["title"])[:40].strip("_") or "vod"
-        final = cfg.INBOX / f"twitch_{v['id']}_{safe}.mp4"
+        final = cfg.INBOX / f"{'live_' if args.rapid else ''}twitch_{v['id']}_{safe}.mp4"
         log(f"downloading {v['id']} '{v['title']}' ({v['duration'] / 3600:.1f} h) -> {final.name}")
         if args.dry_run:
             continue
