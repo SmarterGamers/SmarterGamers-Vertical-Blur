@@ -198,13 +198,32 @@ class Poster:
             pass
         return str(p)
 
+    def set_file(self, page, path: Path) -> None:
+        """Give the page's first file input a local file.
+
+        Attached over CDP, Playwright would stream the whole video through the debugging socket (slow, times
+        out on 30-60 MB clips); Chrome runs on this same PC, so hand it the path with DOM.setFileInputFiles.
+        """
+        if getattr(self, "_browser", None):
+            cdp = self._ctx.new_cdp_session(page)
+            try:
+                root = cdp.send("DOM.getDocument", {"depth": 0})["root"]["nodeId"]
+                node = cdp.send("DOM.querySelector", {"nodeId": root, "selector": 'input[type="file"]'})["nodeId"]
+                if node:
+                    cdp.send("DOM.setFileInputFiles", {"files": [str(path)], "nodeId": node})
+                    return
+            finally:
+                cdp.detach()
+        page.locator('input[type="file"]').first.set_input_files(str(path), timeout=300000)
+
     # -- platforms --------------------------------------------------------------------------------------
     def tiktok(self, page, clip: Path, caption: str) -> str:
         page.goto(TIKTOK_UPLOAD, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(4000)
         if "login" in page.url:
             raise RuntimeError("TikTok is logged out - run social_post.py --login")
-        page.locator('input[type="file"]').first.set_input_files(str(clip), timeout=30000)
+        page.locator('input[type="file"]').first.wait_for(state="attached", timeout=30000)
+        self.set_file(page, clip)
         page.get_by_text(re.compile(r"Uploaded", re.I)).first.wait_for(timeout=180000)
         box = page.locator('div[contenteditable="true"]').first
         box.click()
@@ -256,7 +275,8 @@ class Poster:
             page.wait_for_timeout(5000)
             if not page.get_by_text(re.compile(rf"on your mind, {FB_PAGE_NAME}", re.I)).count():
                 raise RuntimeError(f"Facebook is not acting as the {FB_PAGE_NAME} Page and switching failed")
-        page.locator('input[type="file"]').first.set_input_files(str(clip), timeout=30000)
+        page.locator('input[type="file"]').first.wait_for(state="attached", timeout=30000)
+        self.set_file(page, clip)
         desc = page.get_by_role("textbox", name=re.compile(r"Describe your reel", re.I)).first
         desc.wait_for(timeout=120000)
         desc.click()
