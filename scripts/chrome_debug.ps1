@@ -1,12 +1,13 @@
 # Open a Chrome with remote debugging (127.0.0.1:9222) that is already logged in to everything.
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\chrome_debug.ps1            # open (copy the profile first time)
-#   powershell -ExecutionPolicy Bypass -File scripts\chrome_debug.ps1 -Refresh   # re-copy logins from normal Chrome
+#   powershell -ExecutionPolicy Bypass -File scripts\chrome_debug.ps1
 #
-# Chrome 136+ refuses --remote-debugging-port on its default profile folder, so this keeps a COPY of the
-# normal "Default" profile (logins/cookies, no caches) in C:\SmarterGamers\chrome_debug and runs Chrome on it.
-# Copying needs normal Chrome closed for a moment (its cookie file is locked); it is reopened right after
-# with the last session restored. scripts\social_post.py posts through this window when it is running.
+# Chrome 136+ refuses --remote-debugging-port on its default profile folder, so this runs Chrome on its own
+# folder, C:\SmarterGamers\chrome_debug (first run seeds it with a copy of the normal profile: bookmarks,
+# extensions, settings). Chrome encrypts cookies per profile folder, so site logins do NOT carry over: log in
+# to TikTok and Facebook once in this window and it keeps them. -Refresh re-copies the profile and LOGS
+# EVERYTHING OUT again - don't use it unless the folder is broken. scripts\social_post.py posts through
+# this window (and starts it if it's closed).
 param([switch]$Refresh, [int]$Port = 9222)
 $ErrorActionPreference = "Stop"
 $chrome = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
