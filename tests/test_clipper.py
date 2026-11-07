@@ -295,7 +295,9 @@ def test_free_slot_respects_slots_clashes_and_daily_cap(tmp_path):
     st = Stages.__new__(Stages)
     st.cfg = cfg
     assert st._free_slot("2026-11-06T18:00:00Z") == "2026-11-07T00:00:00Z"      # 13:00 taken -> 19:00 ET
+    st._reserved = []                                                           # forget that reservation
     assert st._free_slot("2026-11-06T19:30:00Z") == "2026-11-07T00:00:00Z"      # off-slot time snaps to a slot
+    st._reserved = []
     (tmp_path / "runs.jsonl").write_text(
         "".join(_json.dumps({"posted": {"publish_at": t}}) + "\n" for t in taken + ["2026-11-07T00:00:00Z"]),
         encoding="utf-8")
