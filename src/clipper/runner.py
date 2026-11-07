@@ -272,7 +272,7 @@ class Stages:
         for c in cands:
             try:
                 visuals.append(visual.window_visual_stats(Path(meta["source"]), float(c["start"]), float(c["end"]),
-                                                          sw, sh, refs=refs))
+                                                          sw, sh, refs=refs, facecam_box=self.cfg.FACECAM_BOX))
             except Exception:
                 visuals.append(None)
         out, rec = score_clip.predict_all(

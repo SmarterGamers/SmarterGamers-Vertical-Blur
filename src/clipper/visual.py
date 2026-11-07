@@ -38,6 +38,9 @@ TAIL_SEC = 10.0                # "ends on a menu" looks at the last 10 s
 TAIL_BAD_FRACTION = 0.5        # ...and calls it bad when >= 50 % of those frames are bad
 BAD_WINDOW_FRACTION = 0.5      # whole window is bad when the weighted bad share is >= 50 %
 MIN_GOOD_PREFIX_SEC = 12.0     # ...unless >= 12 s of clean footage precede the junk: then it's "cut it there"
+MOSTLY_BAD = 0.75              # ...but a window that is >= 75 % junk is bad no matter where the clean bit sits
+LOW_ACTION_BAD = 0.3           # low_action: >= 30 % junk frames (measured: real fights 0.0, dark/idle talk 0.37+)
+LOW_ACTION_MOTION = 5.0        # ...or barely any picture motion (measured: gameplay 14-38, garage/shop 1.9)
 FACECAM_DRAWBOX = "drawbox=x=0:y=ih-ih*0.42:w=iw*0.22:h=ih*0.42:color=black:t=fill"
 _NO_WINDOW = 0x08000000 if hasattr(subprocess, "STARTUPINFO") else 0
 
@@ -56,18 +59,31 @@ def load_menu_refs(path: Optional[Path]) -> List[int]:
     return []
 
 
-def _vf(source_w: int, source_h: int, fps: float) -> str:
+def _facecam_drawbox(facecam_box: Optional[str]) -> Optional[str]:
+    """``x,y,w,h`` fractions (config FACECAM_BOX) → an ffmpeg drawbox that blacks the webcam out."""
+    try:
+        x, y, w, h = [float(t) for t in str(facecam_box).split(",")]
+    except (TypeError, ValueError):
+        return None
+    return f"drawbox=x=iw*{x}:y=ih*{y}:w=iw*{w}:h=ih*{h}:color=black:t=fill"
+
+
+def _vf(source_w: int, source_h: int, fps: float, facecam_box: Optional[str] = None) -> str:
     vertical = source_h > source_w > 0
     parts = [f"fps={fps}"]
     if vertical:
         parts += ["crop=iw:ih*0.32:0:ih*0.34", FACECAM_DRAWBOX]
+    elif _facecam_drawbox(facecam_box):
+        # 16:9 stream recording: the streamer moving in the webcam is not gameplay motion
+        parts.append(_facecam_drawbox(facecam_box))
     parts += [f"scale={W}:{H}", "format=rgb24"]
     return ",".join(parts)
 
 
-def _frames(source: Path, start: float, end: float, source_w: int, source_h: int, fps: float) -> List[bytes]:
+def _frames(source: Path, start: float, end: float, source_w: int, source_h: int, fps: float,
+            facecam_box: Optional[str] = None) -> List[bytes]:
     cmd = ["ffmpeg", "-v", "error", "-ss", f"{max(0.0, start):.3f}", "-t", f"{max(0.0, end - start):.3f}",
-           "-i", str(source), "-vf", _vf(source_w, source_h, fps), "-f", "rawvideo", "-"]
+           "-i", str(source), "-vf", _vf(source_w, source_h, fps, facecam_box), "-f", "rawvideo", "-"]
     p = subprocess.run(cmd, capture_output=True, timeout=120, creationflags=_NO_WINDOW)
     fb = W * H * 3
     raw = p.stdout
@@ -116,14 +132,20 @@ def _analyse_frame(rgb: bytes) -> Dict[str, Any]:
 
 
 def window_visual_stats(source: Path, start: float, end: float, source_w: int = 1920, source_h: int = 1080,
-                        refs: Optional[Sequence[int]] = None, fps: float = 1.0) -> Dict[str, Any]:
-    """Classify 1 fps frames in [start, end). Returns ratios + tail info; ``frames == 0`` means 'unknown'."""
+                        refs: Optional[Sequence[int]] = None, fps: float = 1.0,
+                        facecam_box: Optional[str] = None) -> Dict[str, Any]:
+    """Classify 1 fps frames in [start, end). Returns ratios + tail info; ``frames == 0`` means 'unknown'.
+
+    ``low_action`` flags windows that are not outright menus but are not gameplay worth posting unreviewed
+    either: dark/idle stretches while the streamer talks, lying still, garage/shop screens.
+    """
     try:
-        frames = _frames(Path(source), start, end, source_w, source_h, fps)
+        frames = _frames(Path(source), start, end, source_w, source_h, fps, facecam_box)
     except Exception:
         frames = []
     empty = {"frames": 0, "bad_ratio": 0.0, "menu_ratio": 0.0, "static_ratio": 0.0, "ui_ratio": 0.0,
-             "black_ratio": 0.0, "tail_bad": 0.0, "bad_from_sec": None, "window_bad": False, "tail_is_bad": False}
+             "black_ratio": 0.0, "tail_bad": 0.0, "bad_from_sec": None, "window_bad": False, "tail_is_bad": False,
+             "low_action": False}
     if not frames:
         return empty
     refs = list(refs or [])
@@ -189,13 +211,16 @@ def window_visual_stats(source: Path, start: float, end: float, source_w: int = 
         if i < n - 1:
             bad_from = round((i + 1) / fps, 1)
     good_prefix = bad_from if bad_from is not None else (0.0 if weighted >= BAD_WINDOW_FRACTION else n / fps)
-    window_bad = weighted >= BAD_WINDOW_FRACTION and good_prefix < MIN_GOOD_PREFIX_SEC
+    window_bad = (weighted >= BAD_WINDOW_FRACTION and good_prefix < MIN_GOOD_PREFIX_SEC) or weighted >= MOSTLY_BAD
+    motion_mean = sum(motions) / len(motions) if motions else None
+    low_action = window_bad or weighted >= LOW_ACTION_BAD or (motion_mean is not None and motion_mean < LOW_ACTION_MOTION)
     tail_is_bad = tail_bad >= TAIL_BAD_FRACTION or (weighted >= BAD_WINDOW_FRACTION and not window_bad)
     return {
         "frames": n, "bad_ratio": round(weighted, 3), "menu_ratio": round(counts["menu"] / n, 3),
         "static_ratio": round(counts["static"] / n, 3), "ui_ratio": round(counts["ui"] / n, 3),
         "black_ratio": round(counts["black"] / n, 3), "tail_bad": round(tail_bad, 3), "bad_from_sec": bad_from,
         "window_bad": window_bad, "tail_is_bad": tail_is_bad,
-        "motion_mean": round(sum(motions) / len(motions), 2) if motions else None,
+        "low_action": low_action,
+        "motion_mean": round(motion_mean, 2) if motion_mean is not None else None,
         "luma_mean": round(sum(lumas) / len(lumas), 1) if lumas else None,
     }

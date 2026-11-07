@@ -294,7 +294,8 @@ def predict_candidate(words: Sequence[Dict[str, Any]], rms: Sequence[float], sta
     vis = visual or {}
     if vis.get("frames"):
         vn = {k: vis.get(k) for k in ("bad_ratio", "menu_ratio", "static_ratio", "ui_ratio", "black_ratio",
-                                      "tail_bad", "bad_from_sec", "window_bad", "tail_is_bad")}
+                                      "tail_bad", "bad_from_sec", "window_bad", "tail_is_bad",
+                                      "low_action", "motion_mean", "luma_mean")}
         if vis.get("window_bad"):
             retention = min(retention, 5)
             vn["penalty"] = "mostly menu/static screen"
