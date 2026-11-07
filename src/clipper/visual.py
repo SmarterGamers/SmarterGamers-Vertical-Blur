@@ -130,13 +130,18 @@ def window_visual_stats(source: Path, start: float, end: float, source_w: int = 
     labels: List[str] = []
     prev = None
     counts = {"black": 0, "menu": 0, "static": 0, "ui": 0}
+    motions: List[float] = []
+    lumas: List[int] = []
     for fb in frames:
         a = _analyse_frame(fb)
+        lumas.append(a["med_luma"])
         if a["black"]:
             labels.append("black"); counts["black"] += 1; prev = None
             continue
         label = "ok"
         motion = sum(abs(x - y) for x, y in zip(a["thumb"], prev)) / 72.0 if prev is not None else None
+        if motion is not None:
+            motions.append(motion)
         dark_flat = a["med_luma"] <= DARK_LUMA_MAX and a["flat"] >= DARK_FLAT_MIN
         if refs and any((a["dhash"] ^ ref).bit_count() <= MAX_HAMMING for ref in refs):
             label = "menu"
@@ -191,4 +196,6 @@ def window_visual_stats(source: Path, start: float, end: float, source_w: int = 
         "static_ratio": round(counts["static"] / n, 3), "ui_ratio": round(counts["ui"] / n, 3),
         "black_ratio": round(counts["black"] / n, 3), "tail_bad": round(tail_bad, 3), "bad_from_sec": bad_from,
         "window_bad": window_bad, "tail_is_bad": tail_is_bad,
+        "motion_mean": round(sum(motions) / len(motions), 2) if motions else None,
+        "luma_mean": round(sum(lumas) / len(lumas), 1) if lumas else None,
     }
