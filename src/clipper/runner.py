@@ -431,8 +431,10 @@ class Stages:
         from datetime import datetime, timedelta, timezone
         try:
             from zoneinfo import ZoneInfo
-            tz = ZoneInfo(self.cfg.PUBLISH_TZ)
+            tz = ZoneInfo(self.cfg.PUBLISH_TZ)       # needs the `tzdata` package on Windows (requirements.txt)
         except Exception:
+            sys.stderr.write(f"[runner] WARNING: zoneinfo has no {self.cfg.PUBLISH_TZ} (pip install tzdata); "
+                             "publish slots computed in UTC\n")
             tz = timezone.utc
 
         def parse(v):
@@ -452,6 +454,11 @@ class Stages:
                         taken.append(t)
         except (OSError, ValueError):
             pass
+        # Uploads from the same run reach /upload before any of them is logged, so remember what this
+        # process already handed out (a reservation lives for 6 h, long enough for the batch to be logged).
+        now = datetime.now(timezone.utc)
+        self._reserved = [t for t in getattr(self, "_reserved", []) if (now - t[1]) < timedelta(hours=6)]
+        taken += [t for t, _ in self._reserved]
         slots = []
         for part in str(self.cfg.PUBLISH_SLOTS).split(","):
             try:
@@ -471,6 +478,7 @@ class Stages:
                         continue
                     if any(abs(cand - t) < clash for t in taken):
                         continue
+                    self._reserved.append((cand, now))
                     return cand.strftime("%Y-%m-%dT%H:%M:%SZ")
             day += timedelta(days=1)
         return want.strftime("%Y-%m-%dT%H:%M:%SZ")

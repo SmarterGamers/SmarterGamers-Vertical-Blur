@@ -311,3 +311,14 @@ def test_voice_command_words_never_reach_captions():
              {"start": 11.2, "end": 11.4, "word": "it"}]
     text = " ".join(ch.text for ch in c.caption_chunks(words, 9.0, 20.0))
     assert "clip" not in text and "sick" in text
+
+
+def test_free_slot_reserves_within_one_run(tmp_path):
+    """Three uploads from one run (nothing logged yet) get three different slots."""
+    from clipper.runner import Stages
+    from clipper.config import load_config
+    cfg = load_config({"SG_CLIPPER_RUN_LOG": str(tmp_path / "runs.jsonl")})
+    st = Stages.__new__(Stages)
+    st.cfg = cfg
+    got = {st._free_slot("2026-11-06T15:00:00Z") for _ in range(3)}
+    assert len(got) == 3

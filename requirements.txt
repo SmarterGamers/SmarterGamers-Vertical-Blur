@@ -12,3 +12,4 @@ windnd>=1.0.7
 # av<19            # optional: PyAV pin — av 19 removed the metadata_errors kwarg faster-whisper 1.2.1 uses (TypeError)
 # numpy            # optional: faster RMS/onset maths in /score (pure-Python fallback is used without it)
 yt-dlp>=2026.10.26        # Personal Clipper: pull own Twitch past broadcasts into Inbox (scripts/twitch_vods.py)
+tzdata>=2024.1          # zoneinfo database for Windows (publish-slot time zone in the runner)
