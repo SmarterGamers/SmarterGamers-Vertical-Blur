@@ -108,11 +108,13 @@ def pending(queue: List[Dict[str, Any]], posted: Dict[str, Any], platforms=PLATF
 
 # ------------------------------------------------------------------------------------------ browser side
 class Poster:
-    def __init__(self, cfg: Any, headless: bool = False):
+    def __init__(self, cfg: Any, headless: bool = False, dry_run: bool = False):
+        self.dry_run = dry_run              # go through every step but stop before the final Post click
         self.cfg = cfg
         self.clips = Path(cfg.INBOX).parent
-        self.queue_path = self.clips / "social_queue.json"
-        self.posted_path = self.clips / "social_posted.json"
+        sfx = "_dryrun" if dry_run else ""      # a dry run never touches the real queue/ledger
+        self.queue_path = self.clips / f"social_queue{sfx}.json"
+        self.posted_path = self.clips / f"social_posted{sfx}.json"
         self.log_path = self.clips / "social_post.log"
         self.fail_dir = self.clips / "social_fail"
         self.headless = headless
@@ -217,6 +219,8 @@ class Poster:
             if post.is_enabled():
                 break
             page.wait_for_timeout(2000)
+        if self.dry_run:
+            return "dry-run: ready to post"
         post.click()
         try:
             page.get_by_role("button", name=re.compile(r"^Post now$", re.I)).click(timeout=6000)
@@ -225,13 +229,33 @@ class Poster:
         page.wait_for_url(re.compile(r"/tiktokstudio/content"), timeout=90000)
         return "posted"
 
+    def _fb_switch_to_page(self, page) -> None:
+        """Account menu -> 'Switch to SmarterGamers' (Facebook posts as whichever profile is active)."""
+        page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(4000)
+        page.get_by_role("button", name=re.compile(r"Your profile|Account controls|Account", re.I)).first.click()
+        page.wait_for_timeout(2500)
+        for loc in (page.get_by_role("button", name=re.compile(rf"Switch to {FB_PAGE_NAME}", re.I)),
+                    page.get_by_text(re.compile(rf"Switch to {FB_PAGE_NAME}", re.I)),
+                    page.get_by_role("button", name=re.compile(rf"^{FB_PAGE_NAME}$", re.I))):
+            if loc.count():
+                loc.first.click()
+                page.wait_for_timeout(8000)
+                self.log(f"facebook: switched to the {FB_PAGE_NAME} Page")
+                return
+        raise RuntimeError(f"no 'Switch to {FB_PAGE_NAME}' option in the Facebook account menu")
+
     def facebook(self, page, clip: Path, caption: str) -> str:
         page.goto(FB_REEL_CREATE, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(5000)
         if "login" in page.url:
             raise RuntimeError("Facebook is logged out - run social_post.py --login")
         if not page.get_by_text(re.compile(rf"on your mind, {FB_PAGE_NAME}", re.I)).count():
-            raise RuntimeError(f"Facebook is not acting as the {FB_PAGE_NAME} Page - switch profile in --login")
+            self._fb_switch_to_page(page)
+            page.goto(FB_REEL_CREATE, wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(5000)
+            if not page.get_by_text(re.compile(rf"on your mind, {FB_PAGE_NAME}", re.I)).count():
+                raise RuntimeError(f"Facebook is not acting as the {FB_PAGE_NAME} Page and switching failed")
         page.locator('input[type="file"]').first.set_input_files(str(clip), timeout=30000)
         desc = page.get_by_role("textbox", name=re.compile(r"Describe your reel", re.I)).first
         desc.wait_for(timeout=120000)
@@ -248,6 +272,8 @@ class Poster:
         aud = page.get_by_role("button", name=re.compile(r"Post audience", re.I)).first
         if aud.count() and "public" not in (aud.inner_text() or "").lower():
             raise RuntimeError("Facebook reel audience is not Public")
+        if self.dry_run:
+            return "dry-run: ready to post"
         post.click()
         post.wait_for(state="detached", timeout=120000)
         return "posted"
@@ -272,7 +298,10 @@ class Poster:
                 try:
                     if not clip.is_file():
                         raise RuntimeError(f"clip missing: {clip}")
-                    getattr(self, platform)(page, clip, caption)
+                    result = getattr(self, platform)(page, clip, caption)
+                    if self.dry_run:
+                        self.log(f"{platform}: {result} {it['video_id']} '{caption}'")
+                        continue
                     rec.update(ok=True, at=time.strftime("%Y-%m-%dT%H:%M:%S"), caption=caption, error=None)
                     self.log(f"{platform}: posted {it['video_id']} '{caption}'")
                     done += 1
@@ -326,10 +355,11 @@ def main() -> int:
     ap.add_argument("--title", default="")
     ap.add_argument("--platforms", default=",".join(PLATFORMS))
     ap.add_argument("--interval", type=int, default=60, help="--watch: seconds between queue checks")
+    ap.add_argument("--dry-run", action="store_true", help="do every step except the final Post click")
     ap.add_argument("--headless", action="store_true", help="not recommended: TikTok/Facebook block headless")
     args = ap.parse_args()
     cfg = load_config()
-    poster = Poster(cfg, headless=args.headless)
+    poster = Poster(cfg, headless=args.headless, dry_run=args.dry_run)
     platforms = tuple(p.strip() for p in args.platforms.split(",") if p.strip() in PLATFORMS)
     if args.install:
         install_task(Path(__file__).resolve(), Path(sys.executable))
