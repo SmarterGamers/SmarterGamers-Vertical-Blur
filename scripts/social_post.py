@@ -2,8 +2,9 @@
 
 When a Short goes live on YouTube, the runner's ``/live_check`` adds it to ``<Clips>/social_queue.json``.
 This script (running in the background in Brian's Windows session, see ``--install``) posts each queued clip
-to TikTok Studio and to the SmarterGamers Facebook Page as a Reel, using a real Chrome window driven by
-Playwright with its own saved login (``C:\\SmarterGamers\\social_profile``). No API keys, no paid services.
+to TikTok Studio and to the SmarterGamers Facebook Page as a Reel, in a tab of the already-logged-in debug
+Chrome (``scripts/chrome_debug.ps1``, port 9222; started automatically if closed). Falls back to a separate
+Playwright profile (``C:\\SmarterGamers\\social_profile``, ``--login``). No API keys, no paid services.
 
     python scripts/social_post.py --login              # one time: log in to TikTok + Facebook in the window
     python scripts/social_post.py --watch              # background loop (what the logon task runs)
@@ -29,7 +30,9 @@ from typing import Any, Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from clipper.config import load_config  # noqa: E402
 
-PROFILE_DIR = Path(r"C:\SmarterGamers\social_profile")
+PROFILE_DIR = Path(r"C:\SmarterGamers\social_profile")          # fallback when the debug Chrome isn't available
+DEBUG_PROFILE = Path(r"C:\SmarterGamers\chrome_debug")          # copy of Brian's logged-in Chrome (chrome_debug.ps1)
+CDP_URL = "http://127.0.0.1:9222"
 PLATFORMS = ("tiktok", "facebook")
 TIKTOK_UPLOAD = "https://www.tiktok.com/tiktokstudio/upload"
 FB_REEL_CREATE = "https://www.facebook.com/reels/create"
@@ -114,6 +117,7 @@ class Poster:
         self.fail_dir = self.clips / "social_fail"
         self.headless = headless
         self._pw = self._ctx = None
+        self._browser = self._tab = None
 
     def log(self, msg: str) -> None:
         line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
@@ -126,10 +130,31 @@ class Poster:
             f.write(line + "\n")
 
     # -- browser lifetime ---------------------------------------------------------------------------------
+    def _cdp(self):
+        """Attach to the logged-in debug Chrome (scripts/chrome_debug.ps1), starting it if it isn't running."""
+        try:
+            return self._pw.chromium.connect_over_cdp(CDP_URL, timeout=5000)
+        except Exception:  # noqa: BLE001 - not running yet
+            pass
+        ps1 = Path(__file__).resolve().parent / "chrome_debug.ps1"
+        if os.name == "nt" and ps1.exists() and Path(DEBUG_PROFILE, "Default").exists():
+            subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1)],
+                           capture_output=True, timeout=120)
+            try:
+                return self._pw.chromium.connect_over_cdp(CDP_URL, timeout=10000)
+            except Exception:  # noqa: BLE001
+                pass
+        return None
+
     def open(self):
         from playwright.sync_api import sync_playwright
         PROFILE_DIR.mkdir(parents=True, exist_ok=True)
         self._pw = sync_playwright().start()
+        self._browser = self._cdp() if not self.headless else None
+        if self._browser:                       # the already-logged-in debug Chrome: post in a tab of its own
+            self._ctx = self._browser.contexts[0] if self._browser.contexts else self._browser.new_context()
+            self._tab = self._ctx.new_page()
+            return self._ctx
         args = ["--disable-blink-features=AutomationControlled", "--window-size=1280,1000"]
         if not self.headless:
             args.append("--window-position=40,40")
@@ -143,14 +168,22 @@ class Poster:
 
     def close(self) -> None:
         try:
-            if self._ctx:
+            if getattr(self, "_browser", None):
+                try:
+                    self._tab.close()           # leave the debug Chrome itself running
+                except Exception:  # noqa: BLE001
+                    pass
+            elif self._ctx:
                 self._ctx.close()
         finally:
+            self._browser = self._tab = None
             if self._pw:
                 self._pw.stop()
             self._ctx = self._pw = None
 
     def page(self):
+        if getattr(self, "_tab", None):
+            return self._tab
         pages = self._ctx.pages
         return pages[0] if pages else self._ctx.new_page()
 
