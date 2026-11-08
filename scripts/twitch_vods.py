@@ -61,6 +61,11 @@ def list_kick(python, channel, limit):
     return vods
 
 
+def kick_is_unique(duration: float, twitch_lengths, tolerance: float = 180.0) -> bool:
+    """A multistreamed broadcast has (almost) the same length on Kick and Twitch; no match = Kick-only."""
+    return not any(abs(duration - t) <= tolerance for t in twitch_lengths if t)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--channel", default="smartergamers")
@@ -70,6 +75,8 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--rapid", action="store_true",
                     help="just-ended stream: name it live_twitch_*.mp4 so the clipper posts its top picks at once")
+    ap.add_argument("--kick", action="store_true",
+                    help="also pull Kick VODs that have no Twitch copy (matched by length) - Kick-only streams")
     ap.add_argument("--kick-channel", default="smartergamers",
                     help="with --rapid: fall back to this Kick channel's newest VOD when Twitch has nothing new")
     ap.add_argument("--skip", default="", help="comma-separated VOD ids to mark as done without downloading")
@@ -98,6 +105,16 @@ def main() -> int:
     vods = list_archives(python, args.channel, args.list_limit)
     log(f"archives listed: {len(vods)} ({', '.join(v['id'] for v in vods)})")
     new = [v for v in vods if v["id"] not in ledger and v["duration"] >= args.min_minutes * 60]
+    if args.kick and not args.rapid and len(new) < args.max and args.kick_channel:
+        # Kick-only streams: a Kick VOD whose length matches no Twitch archive is a stream Twitch never kept
+        twitch_all = list_archives(python, args.channel, 30)
+        lengths = [v["duration"] for v in twitch_all] + [float(x.get("duration") or 0) for x in ledger.values()
+                                                         if isinstance(x, dict)]
+        kick = list_kick(python, args.kick_channel, 30)
+        kick_only = [v for v in kick if v["id"] not in ledger and v["duration"] >= args.min_minutes * 60
+                     and kick_is_unique(v["duration"], lengths)]
+        log(f"Kick VODs listed: {len(kick)}, Kick-only and new: {len(kick_only)}")
+        new += kick_only
     if not new and args.rapid and args.kick_channel:
         # A stream just ended but Twitch kept no past broadcast (storage off / multistream): use the Kick VOD.
         kick = list_kick(python, args.kick_channel, args.list_limit)

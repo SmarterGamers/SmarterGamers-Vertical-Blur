@@ -594,6 +594,8 @@ class Stages:
             args.append("--dry-run")
         if body.get("rapid"):
             args += ["--rapid"]            # name the file live_*.mp4 so Auto Select posts the top picks at once
+        if body.get("kick", True):
+            args += ["--kick"]             # also Kick-only streams (Kick VODs with no matching Twitch archive)
         log_path = self.cfg.LEDGER.parent / "twitch_sync.log"
         with log_path.open("a", encoding="utf-8") as lf:
             subprocess.Popen(args, stdout=lf, stderr=subprocess.STDOUT, cwd=str(self.cfg.REPO_DIR),

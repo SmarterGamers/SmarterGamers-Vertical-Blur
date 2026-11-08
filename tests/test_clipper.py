@@ -399,3 +399,12 @@ def test_live_check_queues_social(tmp_path):
     assert r["social_queued"] == 1 and st.live_check({})["social_queued"] == 0
     q = _json.loads((tmp_path / "social_queue.json").read_text(encoding="utf-8"))
     assert q == [{"video_id": "v1", "output": "c.mp4", "title": "T", "source": "twitch_v1_Forza"}]
+
+
+def test_kick_only_matching_by_length():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("twitch_vods", Path(__file__).resolve().parent.parent / "scripts" / "twitch_vods.py")
+    tv = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tv)
+    assert not tv.kick_is_unique(5700, [5703, 3539])        # same stream on both platforms
+    assert tv.kick_is_unique(7679, [5703, 3539, 0])          # Kick-only stream
