@@ -39,7 +39,7 @@ TAIL_BAD_FRACTION = 0.5        # ...and calls it bad when >= 50 % of those frame
 BAD_WINDOW_FRACTION = 0.5      # whole window is bad when the weighted bad share is >= 50 %
 MIN_GOOD_PREFIX_SEC = 12.0     # ...unless >= 12 s of clean footage precede the junk: then it's "cut it there"
 MOSTLY_BAD = 0.75              # ...but a window that is >= 75 % junk is bad no matter where the clean bit sits
-LOW_ACTION_BAD = 0.3           # low_action: >= 30 % junk frames (measured: real fights 0.0, dark/idle talk 0.37+)
+LOW_ACTION_BAD = 0.35          # low_action: > 35 % junk frames (measured: real fights 0.0-0.30, dark/idle talk 0.37+)
 LOW_ACTION_MOTION = 5.0        # ...or barely any picture motion (measured: gameplay 14-38, garage/shop 1.9)
 FACECAM_DRAWBOX = "drawbox=x=0:y=ih-ih*0.42:w=iw*0.22:h=ih*0.42:color=black:t=fill"
 _NO_WINDOW = 0x08000000 if hasattr(subprocess, "STARTUPINFO") else 0
