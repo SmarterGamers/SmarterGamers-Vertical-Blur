@@ -288,7 +288,8 @@ def test_free_slot_respects_slots_clashes_and_daily_cap(tmp_path):
     import json as _json
     from clipper.runner import Stages
     from clipper.config import load_config
-    cfg = load_config({"SG_CLIPPER_RUN_LOG": str(tmp_path / "runs.jsonl")})
+    cfg = load_config({"SG_CLIPPER_RUN_LOG": str(tmp_path / "runs.jsonl"),
+                       "SG_CLIPPER_PUBLISH_SLOTS": "10:00,13:00,16:00,19:00", "SG_CLIPPER_MAX_PER_DAY": "4"})
     taken = ["2026-11-06T15:00:00Z", "2026-11-06T18:00:00Z", "2026-11-06T21:00:00Z"]   # 10,13,16 ET
     (tmp_path / "runs.jsonl").write_text(
         "".join(_json.dumps({"posted": {"publish_at": t}}) + "\n" for t in taken), encoding="utf-8")

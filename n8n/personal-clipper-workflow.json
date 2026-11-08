@@ -173,19 +173,19 @@
             {
               "id": "7fe277c4-0a37-4d91-a201-9f8f6c3b5415",
               "name": "AUTO_MAX_PER_DAY",
-              "value": "4",
+              "value": "6",
               "type": "string"
             },
             {
               "id": "14ca2cb8-f599-47b4-9162-984374f975af",
               "name": "AUTO_MIN_SCORE",
-              "value": "75",
+              "value": "65",
               "type": "string"
             },
             {
               "id": "d4449faf-c84c-4285-aff4-c243b792d60a",
               "name": "AUTO_SLOTS",
-              "value": "10:00,13:00,16:00,19:00",
+              "value": "08:00,10:00,12:00,14:00,16:00,18:00,20:00,22:00",
               "type": "string"
             },
             {

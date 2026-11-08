@@ -54,9 +54,9 @@ class ClipperConfig:
     REVIEW_TIMEOUT_HOURS: int = 24
     MENU_REFS: Path = Path(r"C:\SmarterGamers\menu_refs.json")  # known menu-screen dHashes (optional; from the upload gate)
     GAME: str = ""                     # name used in the social copy; blank = "gameplay" (streams rotate games)
-    PUBLISH_SLOTS: str = "10:00,13:00,16:00,19:00"   # local publish times a Short may take (mirrors n8n AUTO_SLOTS)
+    PUBLISH_SLOTS: str = "08:00,10:00,12:00,14:00,16:00,18:00,20:00,22:00"   # local publish times a Short may take (mirrors n8n AUTO_SLOTS)
     PUBLISH_TZ: str = "America/New_York"
-    MAX_PER_DAY: int = 4                               # hard cap on scheduled Shorts per local day (all runs together)
+    MAX_PER_DAY: int = 8                               # hard cap on scheduled Shorts per local day (all runs together)
     LAYOUT: str = "auto"               # auto = "stream" for landscape sources, "blur" otherwise | blur | stream
     FACECAM_BOX: str = "0.03,0.50,0.31,0.43"  # stream layout: facecam x,y,w,h as fractions of the 16:9 frame
     MIN_SOURCE_SEC: float = 20.0       # /guard: shorter sources are skipped as too_short
