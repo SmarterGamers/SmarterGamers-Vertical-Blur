@@ -422,3 +422,14 @@ def test_live_check_skips_pulled(tmp_path):
     st = Stages.__new__(Stages)
     st.cfg = cfg
     assert [x["video_id"] for x in st.live_check({})["live"]] == ["b"]
+
+
+def test_candidate_count_scales_with_length():
+    from clipper.runner import Stages
+    from clipper.config import load_config
+    st = Stages.__new__(Stages)
+    st.cfg = load_config({})
+    assert st.candidate_count(13 * 60) == 8          # short video: floor
+    assert st.candidate_count(85 * 60) == 11         # 1h25 stream
+    assert st.candidate_count(14.5 * 3600) == 30     # marathon: cap
+    assert st.candidate_count(3600, override=4) == 4

@@ -488,7 +488,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ { job_id: $('Ingest').item.json.job_id, candidates: $json.candidates } }}",
         "options": {
-          "timeout": 600000,
+          "timeout": 1800000,
           "response": {
             "response": {
               "responseFormat": "json"
@@ -514,7 +514,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ { job_id: $('Ingest').item.json.job_id, candidates: $json.candidates } }}",
         "options": {
-          "timeout": 600000,
+          "timeout": 1800000,
           "response": {
             "response": {
               "responseFormat": "json"

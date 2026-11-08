@@ -244,6 +244,7 @@ class Stages:
             words, sig["rms"], duration, target_len=target_len, onsets=sig["onsets"],
             hop_s=sig.get("hop_s", 0.1), v1_used=bool(sig.get("v1_used")),
             events=sig.get("events") or [],
+            top_n=self.candidate_count(duration, body.get("top_n")),
         )
         (job_dir / "candidates.json").write_text(json.dumps(cands, indent=1), encoding="utf-8")
         strong = [c for c in cands if c.get("strong_moment")]
@@ -602,6 +603,18 @@ class Stages:
             subprocess.Popen(args, stdout=lf, stderr=subprocess.STDOUT, cwd=str(self.cfg.REPO_DIR),
                              creationflags=_NO_WINDOW)
         return {"started": True, "log": str(log_path)}
+
+    def candidate_count(self, duration_sec: float, override: Any = None) -> int:
+        """How many moments to put up for the visual check + Ollama: CANDIDATES_PER_HOUR of footage, clamped.
+
+        Five was too few for long streams: when the loudest five were downed/waiting screens the footage check
+        rightly rejected them all and the VOD produced nothing. More candidates = the gate has real fights
+        to choose from."""
+        if override:
+            return max(1, int(override))
+        per_hour = float(self.cfg.CANDIDATES_PER_HOUR or 6)
+        n = round(per_hour * max(0.0, duration_sec) / 3600.0)
+        return max(int(self.cfg.CANDIDATES_MIN), min(int(self.cfg.CANDIDATES_MAX), n))
 
     @staticmethod
     def _no_cam(meta: Dict[str, Any]) -> bool:
