@@ -15,6 +15,7 @@ import json
 import math
 import shutil
 import subprocess
+import time
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -54,7 +55,20 @@ def probe(path: Path) -> Dict[str, Any]:
     if not ffprobe:
         raise RuntimeError("ffprobe not found")
     cmd = [ffprobe, "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", str(path)]
-    res = subprocess.run(cmd, capture_output=True, text=True, creationflags=_NO_WINDOW, timeout=30)
+    # Very long sources (a 14 h, 40 GB VOD) can take well over 30 s to probe on a cold disk or while the
+    # antivirus is still scanning a freshly moved file, so allow 3 minutes and retry once before failing.
+    res = None
+    for attempt in range(2):
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, creationflags=_NO_WINDOW, timeout=180)
+        except subprocess.TimeoutExpired:
+            res = None
+        if res is not None and res.returncode == 0 and res.stdout.strip():
+            break
+        if attempt == 0:
+            time.sleep(15)
+    if res is None:
+        raise RuntimeError(f"ffprobe timed out on {path}")
     if res.returncode != 0 or not res.stdout.strip():
         raise RuntimeError(f"ffprobe failed on {path}: {res.stderr.strip()[-300:]}")
     data = json.loads(res.stdout)
