@@ -46,6 +46,7 @@ from clipper import score_moments  # noqa: E402
 from clipper import transcribe as transcribe_mod  # noqa: E402
 from clipper import visual  # noqa: E402
 from clipper.config import ClipperConfig, load_config  # noqa: E402
+from clipper.games import guess_game  # noqa: E402
 from clipper.ledger import Ledger, append_run_log, file_hash  # noqa: E402
 from clipper.llm import OllamaError, verdict_for_candidate  # noqa: E402
 from predictor import score_clip  # noqa: E402
@@ -292,6 +293,9 @@ class Stages:
             raise StageError("ollama_verdict", "candidates list is required", None)
         tj = job_dir / "transcript.json"
         words = transcribe_mod.load_words(tj) if tj.exists() else []
+        game, shooter = guess_game(str(body.get("game") or ""))
+        if not game:   # the job id keeps the source file name, e.g. yt_..._PS1_NHL2001_min3_nocam_<stamp>
+            game, shooter = guess_game(job_dir.name)
         out = []
         for c in cands:
             cc = dict(c)
@@ -300,7 +304,8 @@ class Stages:
                 spoken = " ".join(w["word"] for w in score_moments.strip_voice_commands(
                     [w for w in words if s0 <= float(w["start"]) < s1]))[:400]
                 cc["llm"] = verdict_for_candidate(self.cfg.OLLAMA_URL, self.cfg.OLLAMA_MODEL, cc,
-                                                  timeout=self.cfg.OLLAMA_TIMEOUT_SEC, spoken=spoken)
+                                                  timeout=self.cfg.OLLAMA_TIMEOUT_SEC, spoken=spoken,
+                                                  game=game, shooter=shooter)
             except Exception as exc:  # never raise on LLM failure
                 cc["llm"] = None
                 cc["llm_error"] = str(exc)

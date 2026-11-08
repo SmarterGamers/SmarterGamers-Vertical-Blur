@@ -66,12 +66,15 @@ VERDICT_SYSTEM = (
     "'Firefight detected'), "
     "title (YouTube Shorts title, max 60 chars, specific, no emojis, never the words clip/9:16/detected), "
     "agrees (true if you agree with the heuristic score and its biggest_fix, else false). "
-    "'gunfire/impact' in the audio analysis means loud game sounds, not literal fire."
+    "'gunfire/impact' in the audio analysis means loud game sounds, not literal fire. "
+    "The hook and title must fit the GAME given: never shooter words (gunfire, grenade, sniper, weapon, firefight) "
+    "for racing, flight, sports, ship or coding videos, and never the filler phrase 'live stream'."
 )
 
 
 def verdict_for_candidate(base_url: str, model: str, candidate: Dict[str, Any],
-                          timeout: int = 60, spoken: str = "") -> Dict[str, Any]:
+                          timeout: int = 60, spoken: str = "", game: str = "",
+                          shooter: bool = True) -> Dict[str, Any]:
     """Asks Ollama for a verdict on one candidate. Returns the ``llm`` dict (raises OllamaError).
 
     The prompt is labelled plain text, not JSON: small models under ``format: json`` tend to echo a JSON user
@@ -80,7 +83,10 @@ def verdict_for_candidate(base_url: str, model: str, candidate: Dict[str, Any],
     """
     pred = candidate.get("predict") or {}
     reason = str(candidate.get("reason") or "").replace("firefight detected", "gunfire/impact")
+    if not shooter:   # a loud crash in a racing/flight/sports game is not gunfire
+        reason = reason.replace("gunfire/impact", "loud game moment")
     user = (
+        f"GAME: {game or 'unknown (a live gaming stream)'}.\n"
         f"CLIP WINDOW: {candidate.get('start')}-{candidate.get('end')}s of a live stream recording.\n"
         f"WHAT THE AUDIO ANALYSIS FOUND: {reason}.\n"
         f"WHAT THE STREAMER SAYS IN THIS WINDOW: {spoken.strip() or '(nothing - no speech)'}\n"

@@ -436,3 +436,27 @@ def test_candidate_count_scales_with_length():
     assert st.candidate_count(85 * 60) == 11         # 1h25 stream
     assert st.candidate_count(14.5 * 3600) == 30     # marathon: cap
     assert st.candidate_count(3600, override=4) == 4
+
+
+def test_guess_game_from_job_names():
+    from clipper.games import guess_game
+    assert guess_game("yt_ipsVwq3tPpc_PS1_NHL2001_min3_nocam_20261108_133459") == ("NHL 2001", False)
+    assert guess_game("yt_NJfQel9KaNY_FlightSimulator_Yosemite_min3_nocam")[0] == "Microsoft Flight Simulator"
+    assert guess_game("twitch_v2921256382_I_Hit_a_CACTUS_With_an_RPG_Battlefield_6") == ("Battlefield", True)
+    assert guess_game("live_kick_01a1bbce_Gaming_with_Friends") == ("", True)
+
+
+def test_verdict_prompt_names_game_and_drops_gunfire_for_non_shooters(monkeypatch):
+    from clipper import llm
+    seen = {}
+
+    def fake_chat(base, model, system, user, timeout):
+        seen["system"], seen["user"] = system, user
+        return {"title": "Smooth Landing in Yosemite"}
+
+    monkeypatch.setattr(llm, "chat_json", fake_chat)
+    out = llm.verdict_for_candidate("http://x", "m", {"start": 0, "end": 30, "reason": "firefight detected"},
+                                    game="Microsoft Flight Simulator", shooter=False)
+    assert "GAME: Microsoft Flight Simulator" in seen["user"]
+    assert "gunfire" not in seen["user"] and "loud game moment" in seen["user"]
+    assert "live stream" in seen["system"] and out["title"] == "Smooth Landing in Yosemite"
