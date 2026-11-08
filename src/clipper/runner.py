@@ -701,6 +701,9 @@ class Stages:
             vid = posted.get("video_id")
             if not vid or vid in done or vid in seen:
                 continue
+            # pulled / private Shorts never "go live": no announcement, no TikTok/Facebook cross-post
+            if rec.get("status") == "pulled" or str(posted.get("privacy") or "").lower() == "private":
+                continue
             pub = posted.get("publish_at")
             if pub:
                 try:

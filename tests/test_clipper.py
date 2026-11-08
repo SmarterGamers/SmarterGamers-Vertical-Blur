@@ -408,3 +408,17 @@ def test_kick_only_matching_by_length():
     spec.loader.exec_module(tv)
     assert not tv.kick_is_unique(5700, [5703, 3539])        # same stream on both platforms
     assert tv.kick_is_unique(7679, [5703, 3539, 0])          # Kick-only stream
+
+
+def test_live_check_skips_pulled(tmp_path):
+    import json as _json
+    from clipper.runner import Stages
+    from clipper.config import load_config
+    cfg = load_config({"SG_CLIPPER_RUN_LOG": str(tmp_path / "runs.jsonl"), "SG_CLIPPER_LEDGER": str(tmp_path / "p.json"),
+                       "SG_CLIPPER_INBOX": str(tmp_path / "Inbox")})
+    rows = [{"status": "pulled", "output": "a.mp4", "posted": {"video_id": "a", "privacy": "private", "publish_at": None}},
+            {"status": "posted", "output": "b.mp4", "posted": {"video_id": "b", "privacy": "public"}}]
+    (tmp_path / "runs.jsonl").write_text("\n".join(_json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    st = Stages.__new__(Stages)
+    st.cfg = cfg
+    assert [x["video_id"] for x in st.live_check({})["live"]] == ["b"]
