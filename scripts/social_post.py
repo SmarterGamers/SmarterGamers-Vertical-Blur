@@ -47,6 +47,14 @@ GAME_TAGS = [  # (keywords seen in the title or source name, hashtags)
     (("wardogs",), "#wardogs"),
     (("hell let loose", "hll"), "#hellletloose"),
     (("bodycam",), "#bodycam"),
+    (("need for speed", "nfs", "underground"), "#needforspeed #nfsu2"),
+    (("worldofwarships", "world of warships", "warships"), "#worldofwarships"),
+    (("flightsimulator", "flight simulator", "msfs"), "#msfs #flightsimulator"),
+    (("granturismo", "gran turismo"), "#granturismo #ps1"),
+    (("nhl",), "#nhl #ps1"),
+    (("tripleplay", "baseball"), "#baseball #ps1"),
+    (("bmx", "mathoffman"), "#bmx #ps1"),
+    (("trashtalk", "trash talk", "ai robot", "chatgpt"), "#ai #chatgpt"),
 ]
 BASE_TAGS = "#gaming #streamer #smartergamers"
 
