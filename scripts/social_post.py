@@ -57,22 +57,34 @@ GAME_TAGS = [  # (keywords seen in the title or source name, hashtags)
     (("trashtalk", "trash talk", "ai robot", "chatgpt"), "#ai #chatgpt"),
 ]
 BASE_TAGS = "#gaming #streamer #smartergamers"
+GAME_NAMES = {"#forzahorizon6": "Forza Horizon 6", "#battlefield6": "Battlefield 6", "#callofduty": "Call of Duty",
+              "#beamng": "BeamNG", "#wardogs": "WARDOGS", "#hellletloose": "Hell Let Loose", "#bodycam": "Bodycam",
+              "#needforspeed": "Need for Speed Underground 2", "#worldofwarships": "World of Warships",
+              "#msfs": "Flight Simulator", "#granturismo": "Gran Turismo 2", "#nhl": "NHL 2001",
+              "#baseball": "Triple Play Baseball", "#bmx": "Mat Hoffman's Pro BMX", "#ai": "AI trash-talk bot"}
 
 
 # ------------------------------------------------------------------------------------------ pure helpers
 def build_caption(title: str, source: str = "", platform: str = "tiktok") -> str:
-    """YouTube title minus '#Shorts' + game hashtags found in the title/source name + the channel tags."""
+    """Three lines: title (YouTube title minus '#Shorts'), a one-line description naming the game, and exactly
+    five hashtags (game tags first, then #gaming #streamer #smartergamers to fill)."""
     t = re.sub(r"\s*#shorts\b", "", title or "", flags=re.I).strip() or "Stream moment"
     hay = f"{title} {source}".lower().replace("_", " ")
-    tags = []
+    tags: List[str] = []
+    game = ""
     for keys, tag in GAME_TAGS:
         if any(re.search(rf"\b{re.escape(k)}\b", hay) for k in keys):
-            tags.append(tag)
-    tag_line = " ".join(tags[:2] + [BASE_TAGS])
-    if platform == "facebook":          # Facebook reads better with fewer tags
-        tag_line = " ".join((tags[:1] or []) + ["#gaming #smartergamers"])
-    return f"{t} {tag_line}".strip()
-
+            tags += [x for x in tag.split() if x not in tags]
+            game = game or GAME_NAMES.get(tag.split()[0], "")
+    for filler in ("#gaming", "#streamer", "#smartergamers", "#fyp", "#clips"):
+        if len(tags) >= 5:
+            break
+        if filler not in tags:
+            tags.append(filler)
+    tags = tags[:4] + (["#smartergamers"] if "#smartergamers" not in tags[:4] else [tags[4]])
+    desc = (f"Straight from the {game} stream. " if game else "Straight from the stream. ") + \
+        "Live on TikTok, Twitch & Kick."
+    return f"{t}\n{desc}\n{' '.join(tags[:5])}"
 
 def load_json(path: Path, default: Any) -> Any:
     try:
@@ -206,6 +218,15 @@ class Poster:
             pass
         return str(p)
 
+    @staticmethod
+    def type_lines(page, text: str) -> None:
+        """Insert a multi-line caption: one insert per line (no per-key races, emoji intact), Shift+Enter between."""
+        lines = text.split("\n")
+        for i, ln in enumerate(lines):
+            page.keyboard.insert_text(ln)
+            if i < len(lines) - 1:
+                page.keyboard.press("Shift+Enter")
+
     def set_file(self, page, path: Path) -> None:
         """Give the page's first file input a local file.
 
@@ -237,7 +258,7 @@ class Poster:
         box.click()
         page.keyboard.press("Control+A")
         page.keyboard.press("Backspace")
-        page.keyboard.type(caption, delay=15)
+        self.type_lines(page, caption)
         page.keyboard.press("Escape")
         page.wait_for_timeout(2500)
         post = page.get_by_role("button", name="Post", exact=True)
@@ -288,7 +309,7 @@ class Poster:
         desc = page.get_by_role("textbox", name=re.compile(r"Describe your reel", re.I)).first
         desc.wait_for(timeout=120000)
         desc.click()
-        page.keyboard.type(caption, delay=15)
+        self.type_lines(page, caption)
         nxt = page.get_by_role("button", name="Next", exact=True).first
         for _ in range(60):
             if nxt.is_enabled():

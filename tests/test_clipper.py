@@ -374,9 +374,10 @@ def test_social_caption_and_queue(tmp_path):
     sp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(sp)
     cap = sp.build_caption("Drone Kill Explosion in Call of Duty! #Shorts", "twitch_v1_CallOfDuty_Forza")
-    assert "#Shorts" not in cap and "#callofduty" in cap and "#forzahorizon6" in cap and cap.endswith("#smartergamers")
-    assert sp.build_caption("100K Night Drift in Forza Horizon #Shorts", "", "facebook") == \
-        "100K Night Drift in Forza Horizon #forzahorizon6 #forza #gaming #smartergamers"
+    title, desc, tags = cap.split("\n")
+    assert title == "Drone Kill Explosion in Call of Duty!" and "Call of Duty" in desc
+    assert len(tags.split()) == 5 and "#callofduty" in tags and "#smartergamers" in tags
+    assert len(sp.build_caption("Hi", "").split("\n")[2].split()) == 5
     q = tmp_path / "q.json"
     assert sp.enqueue(q, [{"video_id": "a", "output": "a.mp4", "title": "A"}, {"video_id": "a", "output": "a.mp4"}]) == 1
     assert sp.enqueue(q, [{"video_id": "a", "output": "a.mp4"}, {"video_id": "b", "output": "b.mp4"}]) == 1
