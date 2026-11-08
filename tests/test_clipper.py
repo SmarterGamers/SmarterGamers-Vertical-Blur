@@ -418,11 +418,13 @@ def test_live_check_skips_pulled(tmp_path):
     cfg = load_config({"SG_CLIPPER_RUN_LOG": str(tmp_path / "runs.jsonl"), "SG_CLIPPER_LEDGER": str(tmp_path / "p.json"),
                        "SG_CLIPPER_INBOX": str(tmp_path / "Inbox")})
     rows = [{"status": "pulled", "output": "a.mp4", "posted": {"video_id": "a", "privacy": "private", "publish_at": None}},
-            {"status": "posted", "output": "b.mp4", "posted": {"video_id": "b", "privacy": "public"}}]
+            {"status": "posted", "output": "b.mp4", "posted": {"video_id": "b", "privacy": "public"}},
+            {"status": "posted", "output": "c.mp4", "posted": {"video_id": "c", "privacy": "private",
+                                                              "publish_at": "2026-01-01T15:00:00Z"}}]
     (tmp_path / "runs.jsonl").write_text("\n".join(_json.dumps(r) for r in rows) + "\n", encoding="utf-8")
     st = Stages.__new__(Stages)
     st.cfg = cfg
-    assert [x["video_id"] for x in st.live_check({})["live"]] == ["b"]
+    assert [x["video_id"] for x in st.live_check({})["live"]] == ["b", "c"]   # c: scheduled, now live
 
 
 def test_candidate_count_scales_with_length():
