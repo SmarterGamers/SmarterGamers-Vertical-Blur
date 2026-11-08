@@ -139,7 +139,7 @@ class Stages:
         if not path.is_file():
             return {"skip": True, "reason": "gone"}
         digest = file_hash(path)
-        if self.ledger.is_processed(digest):
+        if self.ledger.is_processed(digest) and "_redo" not in path.name.lower():   # *_redo* = clip it again
             return {"skip": True, "reason": "already_processed", "hash": digest}
         try:
             info = audio_mod.probe(path)
