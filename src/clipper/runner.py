@@ -272,7 +272,8 @@ class Stages:
         for c in cands:
             try:
                 visuals.append(visual.window_visual_stats(Path(meta["source"]), float(c["start"]), float(c["end"]),
-                                                          sw, sh, refs=refs, facecam_box=self.cfg.FACECAM_BOX))
+                                                          sw, sh, refs=refs,
+                                                          facecam_box=None if self._no_cam(meta) else self.cfg.FACECAM_BOX))
             except Exception:
                 visuals.append(None)
         out, rec = score_clip.predict_all(
@@ -333,7 +334,7 @@ class Stages:
         layout = str(body.get("layout") or self.cfg.LAYOUT or "auto").lower()
         if layout == "auto":
             sw, sh = int(meta.get("width") or 0), int(meta.get("height") or 0)
-            layout = "stream" if sw > sh > 0 else "blur"
+            layout = "stream" if sw > sh > 0 and not self._no_cam(meta) else "blur"
         captions_path: Optional[Path] = None
         if use_captions:
             tj = job_dir / "transcript.json"
@@ -601,6 +602,12 @@ class Stages:
             subprocess.Popen(args, stdout=lf, stderr=subprocess.STDOUT, cwd=str(self.cfg.REPO_DIR),
                              creationflags=_NO_WINDOW)
         return {"started": True, "log": str(log_path)}
+
+    @staticmethod
+    def _no_cam(meta: Dict[str, Any]) -> bool:
+        """Sources named ``*_nocam*`` (older uploads recorded without the webcam overlay) keep the classic
+        blur layout: the stream layout would crop a slice of gameplay into the 'facecam' panel."""
+        return "_nocam" in str(meta.get("original_stem") or meta.get("original") or "").lower()
 
     # ---------------------------------------------------------------- POST /stream_watch
     STREAM_END_GRACE_MIN = 10      # offline this long before we call the stream over (covers reconnects)
