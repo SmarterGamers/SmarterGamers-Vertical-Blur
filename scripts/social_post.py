@@ -69,13 +69,14 @@ def build_caption(title: str, source: str = "", platform: str = "tiktok") -> str
     """Three lines: title (YouTube title minus '#Shorts'), a one-line description naming the game, and exactly
     five hashtags (game tags first, then #gaming #streamer #smartergamers to fill)."""
     t = re.sub(r"\s*#shorts\b", "", title or "", flags=re.I).strip() or "Stream moment"
-    hay = f"{title} {source}".lower().replace("_", " ")
     tags: List[str] = []
     game = ""
-    for keys, tag in GAME_TAGS:
-        if any(re.search(rf"\b{re.escape(k)}\b", hay) for k in keys):
-            tags += [x for x in tag.split() if x not in tags]
-            game = game or GAME_NAMES.get(tag.split()[0], "")
+    # the title names what is on screen; the source file name only says what the stream was labelled
+    for hay in (title.lower(), f"{title} {source}".lower().replace("_", " ")):
+        for keys, tag in GAME_TAGS:
+            if any(re.search(rf"\b{re.escape(k)}\b", hay) for k in keys):
+                tags += [x for x in tag.split() if x not in tags]
+                game = game or GAME_NAMES.get(tag.split()[0], "")
     for filler in ("#gaming", "#streamer", "#smartergamers", "#fyp", "#clips"):
         if len(tags) >= 5:
             break
