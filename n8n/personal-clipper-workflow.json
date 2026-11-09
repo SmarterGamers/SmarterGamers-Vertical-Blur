@@ -323,7 +323,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ { path: $json.path } }}",
         "options": {
-          "timeout": 120000,
+          "timeout": 900000,
           "response": {
             "response": {
               "responseFormat": "json"
@@ -462,7 +462,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ { job_id: $('Ingest').item.json.job_id, target_len: $('Config').item.json.TARGET_LEN_SEC } }}",
         "options": {
-          "timeout": 600000,
+          "timeout": 3600000,
           "response": {
             "response": {
               "responseFormat": "json"
