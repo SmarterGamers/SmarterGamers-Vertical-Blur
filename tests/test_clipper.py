@@ -460,3 +460,15 @@ def test_verdict_prompt_names_game_and_drops_gunfire_for_non_shooters(monkeypatc
     assert "GAME: Microsoft Flight Simulator" in seen["user"]
     assert "gunfire" not in seen["user"] and "loud game moment" in seen["user"]
     assert "live stream" in seen["system"] and out["title"] == "Smooth Landing in Yosemite"
+
+
+def test_keep_slot_exact_stream_times(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from clipper.runner import Stages as Runner
+    r = Runner.__new__(Runner)
+    soon = (datetime.now(timezone.utc) + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    later = (datetime.now(timezone.utc) + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert r._keep_slot("") == ""
+    assert r._keep_slot(soon) == ""            # too close: post now
+    assert r._keep_slot(later) == later        # kept exactly, no slot search
+    assert r._reserved and r._reserved[-1][0].strftime("%Y-%m-%dT%H:%M:%SZ") == later

@@ -426,6 +426,22 @@ class Stages:
 
     SLOT_CLASH_MIN = 45         # two Shorts closer than this are a clash
 
+    def _keep_slot(self, publish_at: str) -> str:
+        """An exact publish time (stream posts): returned unchanged, but reserved so archive Shorts handed a
+        free slot afterwards in this process steer clear of it. Times already past become blank (post now)."""
+        from datetime import datetime, timezone
+        if not publish_at:
+            return publish_at
+        try:
+            t = datetime.fromisoformat(publish_at.replace("Z", "+00:00")).astimezone(timezone.utc)
+        except ValueError:
+            return publish_at
+        now = datetime.now(timezone.utc)
+        if (t - now).total_seconds() < 15 * 60:      # YouTube needs a scheduled time comfortably in the future
+            return ""
+        self._reserved = getattr(self, "_reserved", []) + [(t, now)]
+        return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
     def _free_slot(self, publish_at: str) -> str:
         """The first configured publish slot at/after ``publish_at`` that is free and on a day that still has room.
 
@@ -522,7 +538,10 @@ class Stages:
             "spoken": spoken,
             "game": str(body.get("game") or self.cfg.GAME or ""),
             "original": self.meta(job_dir).get("original", output.stem),
-            "publish_at": self._free_slot(str(body.get("publish_at") or "")),   # ISO UTC → scheduled
+            # ISO UTC -> scheduled. Stream posts arrive with exact=true: they keep their time (spread over the
+            # hours after a stream, allowed to overlap the archive schedule); everything else gets a free slot.
+            "publish_at": (self._keep_slot(str(body.get("publish_at") or "")) if body.get("exact")
+                           else self._free_slot(str(body.get("publish_at") or ""))),
         }
         script = self.cfg.REPO_DIR / "scripts" / "yt_post.py"
         try:
