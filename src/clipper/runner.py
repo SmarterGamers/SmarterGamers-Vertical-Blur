@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -656,7 +657,7 @@ class Stages:
         Raises StageError when Twitch can't be reached, so a network blip never reads as "stream ended".
         """
         import urllib.request
-        q = json.dumps({"query": '{ user(login: "%s") { stream { id createdAt } } }' % channel}).encode()
+        q = json.dumps({"query": '{ user(login: "%s") { stream { id createdAt game { name } } } }' % channel}).encode()
         req = urllib.request.Request("https://gql.twitch.tv/gql", data=q, method="POST",
                                      headers={"Client-Id": self.TWITCH_WEB_CLIENT_ID,
                                               "Content-Type": "application/json"})
@@ -669,7 +670,137 @@ class Stages:
         if user is None:
             raise StageError("stream_watch", f"Twitch user not found: {channel}", "check the channel name")
         s = user.get("stream")
-        return {"id": s.get("id"), "started_at": s.get("createdAt")} if s else None
+        return {"id": s.get("id"), "started_at": s.get("createdAt"),
+                "game": ((s.get("game") or {}).get("name") or "")} if s else None
+
+    # ---------------------------------------------------------------- live recording + TikTok end
+    TIKTOK_USER = "smartergamers"
+    KICK_CHANNEL = "smartergamers"
+
+    @staticmethod
+    def _http_json(url: str, timeout: int = 20) -> Dict[str, Any]:
+        import urllib.request
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8"))
+
+    def _tiktok_live(self, user: str) -> Optional[bool]:
+        """True while ``user`` is LIVE on TikTok, False when not, None when TikTok can't be read (never "ended")."""
+        try:
+            d = self._http_json(f"https://www.tiktok.com/api-live/user/room/?aid=1988&uniqueId={user}&sourceType=54")
+        except Exception:  # noqa: BLE001
+            return None
+        data = d.get("data") or {}
+        if not data:
+            return None
+        room = data.get("liveRoom") or {}
+        return int(room.get("status") or (data.get("user") or {}).get("status") or 0) == 2
+
+    def _kick_playlist(self, channel: str) -> Optional[str]:
+        """The live HLS playlist URL while ``channel`` is live on Kick (no ads, unlike Twitch for a viewer)."""
+        try:
+            d = self._http_json(f"https://kick.com/api/v2/channels/{channel}/livestream")
+        except Exception:  # noqa: BLE001
+            return None
+        return ((d.get("data") or {}).get("playback_url")) or None
+
+    def _rec_dir(self) -> Path:
+        d = self.cfg.LEDGER.parent / ".live_rec"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    @staticmethod
+    def _pid_alive(pid: Any) -> bool:
+        if not pid:
+            return False
+        try:
+            out = subprocess.run(["tasklist", "/FI", f"PID eq {int(pid)}", "/NH"], capture_output=True, text=True,
+                                 timeout=15, creationflags=_NO_WINDOW).stdout
+            return str(int(pid)) in out
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _rec_ensure(self, state: Dict[str, Any]) -> None:
+        """Keep a local recording of the live stream going (Kick's live playlist -> .ts parts). A part ends when
+        the playlist token expires or the network drops; the next poll starts a new part. Parts are joined when
+        the stream (or its TikTok LIVE) ends, so the Shorts don't wait for a VOD download."""
+        if state.get("rec_skip"):
+            return
+        if "rec" not in state:
+            # joined late (runner restarted / feature deployed mid-stream): a partial recording would miss the
+            # start, so this broadcast keeps using the full VOD instead
+            from datetime import datetime, timezone
+            try:
+                began = datetime.fromisoformat(str(state.get("started_at")).replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - began).total_seconds() > 15 * 60:
+                    state["rec_skip"] = True
+                    return
+            except ValueError:
+                pass
+        rec = state.setdefault("rec", {"parts": [], "pid": None})
+        if self._pid_alive(rec.get("pid")):
+            return
+        url = self._kick_playlist(self.KICK_CHANNEL)
+        ffmpeg = audio_mod.find_ffmpeg()
+        if not url or not ffmpeg:
+            return
+        part = self._rec_dir() / f"{state.get('stream_id')}_{len(rec['parts']):02d}.ts"
+        p = subprocess.Popen([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", url, "-c", "copy",
+                              "-f", "mpegts", str(part)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, creationflags=_NO_WINDOW)
+        rec["parts"].append(str(part))
+        rec["pid"] = p.pid
+
+    def _rec_stop(self, state: Dict[str, Any]) -> None:
+        pid = (state.get("rec") or {}).get("pid")
+        if pid and self._pid_alive(pid):
+            subprocess.run(["taskkill", "/PID", str(int(pid)), "/T", "/F"], capture_output=True, timeout=30,
+                           creationflags=_NO_WINDOW)
+        if state.get("rec"):
+            state["rec"]["pid"] = None
+
+    def _rec_finish(self, state: Dict[str, Any], reason: str) -> bool:
+        """Stops the recorder and, in the background, joins the parts into ``Inbox/live_rec_<when>_<game>.mp4``
+        (the ``live_`` prefix = stream mode: first Short now, the rest over the next 4 h). False when there is
+        nothing usable recorded, so the caller can fall back to the VOD download."""
+        self._rec_stop(state)
+        parts = [Path(x) for x in (state.get("rec") or {}).get("parts", []) if Path(x).is_file()]
+        parts = [x for x in parts if x.stat().st_size > 5 * 1024 * 1024]
+        if sum(x.stat().st_size for x in parts) < 200 * 1024 * 1024:     # < ~5 min of video: not worth it
+            return False
+        from datetime import datetime
+        try:
+            when = datetime.fromisoformat(str(state.get("started_at")).replace("Z", "+00:00")).astimezone()
+        except ValueError:
+            when = datetime.now().astimezone()
+        game = re.sub(r"[^A-Za-z0-9]+", "_", str(state.get("game") or "Stream")).strip("_")[:30] or "Stream"
+        name = f"live_rec_{when:%Y%m%d_%H%M}_{game}.mp4"
+        tmp = self.cfg.INBOX.parent / ".twitch_tmp"
+        tmp.mkdir(parents=True, exist_ok=True)
+        ffmpeg = audio_mod.find_ffmpeg()
+        log_path = self.cfg.LEDGER.parent / "twitch_sync.log"
+
+        def join() -> None:
+            out = tmp / name
+            src = "concat:" + "|".join(str(x) for x in parts)
+            r = subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", src, "-c", "copy",
+                                "-bsf:a", "aac_adtstoasc", "-movflags", "+faststart", str(out)],
+                               capture_output=True, text=True, timeout=3 * 3600, creationflags=_NO_WINDOW)
+            with log_path.open("a", encoding="utf-8") as lf:
+                stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                if r.returncode == 0 and out.is_file() and out.stat().st_size > 50 * 1024 * 1024:
+                    shutil.move(str(out), str(self.cfg.INBOX / name))
+                    lf.write(f"[{stamp}] live recording ({reason}) -> Inbox/{name}\n")
+                    for x in parts:                      # the .ts parts are now inside the mp4
+                        try:
+                            x.unlink()
+                        except OSError:
+                            pass
+                else:
+                    lf.write(f"[{stamp}] live recording join FAILED ({reason}): {(r.stderr or '')[-300:]}\n")
+        threading.Thread(target=join, daemon=True).start()
+        state["recorded_file"] = name
+        return True
 
     def stream_watch(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """Polled every 5 min by n8n. When a Twitch stream has been over for STREAM_END_GRACE_MIN, starts
@@ -688,27 +819,72 @@ class Stages:
         now = datetime.now(timezone.utc)
         live = self._twitch_live(channel)
         result: Dict[str, Any] = {"live": bool(live), "ended": False, "sync_started": False}
+        grace = self.STREAM_END_GRACE_MIN * 60
         if live:
             if state.get("stream_id") != live["id"]:
-                state = {"stream_id": live["id"], "started_at": live["started_at"]}
+                if state.get("rec"):
+                    self._rec_stop(state)              # a new broadcast: never keep writing the old one
+                state = {"stream_id": live["id"], "started_at": live["started_at"], "game": live.get("game")}
             state.update(live=True, last_seen=now.isoformat(), offline_since=None)
+            if live.get("game"):
+                state["game"] = live["game"]
+            # Brian ends TikTok LIVE first and OBS keeps feeding Twitch/Kick: TikTok ending ends the stream too.
+            tt = self._tiktok_live(self.TIKTOK_USER)
+            result["tiktok_live"] = tt
+            if tt:
+                state.update(tiktok_seen=True, tiktok_off_since=None)
+            elif tt is False and state.get("tiktok_seen") and not state.get("clipped"):
+                off = state.get("tiktok_off_since")
+                if not off:
+                    state["tiktok_off_since"] = now.isoformat()
+                elif (now - datetime.fromisoformat(off)).total_seconds() >= grace and not body.get("dry_run"):
+                    if self._rec_finish(state, "TikTok LIVE ended"):
+                        state.update(clipped="tiktok_end", clipped_at=now.isoformat())
+                        result["ended"] = "tiktok"
+            if not state.get("clipped") and self.cfg.RECORD_STREAMS and not body.get("dry_run"):
+                self._rec_ensure(state)
         elif state.get("live"):
             off = state.get("offline_since")
             if not off:
                 state["offline_since"] = now.isoformat()
-            elif (now - datetime.fromisoformat(off)).total_seconds() >= self.STREAM_END_GRACE_MIN * 60:
+            elif (now - datetime.fromisoformat(off)).total_seconds() >= grace:
                 state.update(live=False, ended_at=state.get("last_seen"), synced_at=now.isoformat())
                 result["ended"] = True
                 result["stream_id"] = state.get("stream_id")
                 result["started_at"] = state.get("started_at")
                 if not body.get("dry_run"):
-                    self.twitch_sync({"channel": channel, "max": 1, "rapid": True})
-                    result["sync_started"] = True
+                    if not state.get("clipped") and self._rec_finish(state, "stream ended"):
+                        state.update(clipped="twitch_end", clipped_at=now.isoformat())
+                    if state.get("clipped"):
+                        self._rec_stop(state)
+                        self._mark_stream_vod_done(state)
+                    else:
+                        self.twitch_sync({"channel": channel, "max": 1, "rapid": True})
+                        result["sync_started"] = True
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(state, indent=1), encoding="utf-8")
         os.replace(tmp, path)
         result["state"] = state
         return result
+
+    def _mark_stream_vod_done(self, state: Dict[str, Any]) -> None:
+        """The broadcast was clipped from the local recording: put its full length in the VOD ledger, so the
+        daily sync's Kick-only check (Kick VOD length == a known broadcast) never clips it a second time."""
+        from datetime import datetime
+        try:
+            a = datetime.fromisoformat(str(state["started_at"]).replace("Z", "+00:00"))
+            b = datetime.fromisoformat(str(state["ended_at"]).replace("Z", "+00:00"))
+        except (KeyError, ValueError):
+            return
+        path = self.cfg.LEDGER.parent / "twitch_vods.json"
+        try:
+            ledger = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except (OSError, ValueError):
+            return
+        ledger[f"rec_{state.get('stream_id')}"] = {"title": f"live recording {state.get('recorded_file')}",
+                                                  "duration": (b - a).total_seconds(), "via": "live_rec",
+                                                  "downloaded_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+        path.write_text(json.dumps(ledger, indent=1), encoding="utf-8")
 
     # ---------------------------------------------------------------- POST /live_check
     def live_check(self, body: Dict[str, Any]) -> Dict[str, Any]:

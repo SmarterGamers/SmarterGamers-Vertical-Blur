@@ -31,6 +31,7 @@ class ClipperConfig:
     INBOX: Path = Path(r"C:\SmarterGamers\Clips\Inbox")
     WORKING: Path = Path(r"C:\SmarterGamers\Clips\Working")
     READY: Path = Path(r"C:\SmarterGamers\Clips\Ready")
+    RECORD_STREAMS: bool = True     # record the live stream locally (Kick playlist) so Shorts start at stream end
     LEDGER: Path = Path(r"C:\SmarterGamers\Clips\processed.json")
     RUN_LOG: Path = Path(r"C:\SmarterGamers\Clips\runs.jsonl")
 

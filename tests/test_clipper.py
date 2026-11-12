@@ -340,6 +340,9 @@ def test_stream_watch_triggers_rapid_sync_once_after_grace(tmp_path, monkeypatch
     st.twitch_sync = lambda body: synced.append(body) or {"started": True}
     status = {"v": {"id": "s1", "started_at": "2026-11-07T01:00:00Z"}}
     st._twitch_live = lambda channel: status["v"]
+    st._tiktok_live = lambda user: None            # never touch the network / start a recorder in tests
+    st._rec_ensure = lambda state: None
+    st._rec_finish = lambda state, reason: False   # nothing recorded -> falls back to the VOD sync
     assert st.stream_watch({})["live"] is True
     status["v"] = None
     assert st.stream_watch({})["ended"] is False                    # first offline poll: start the grace clock
@@ -472,3 +475,63 @@ def test_keep_slot_exact_stream_times(tmp_path):
     assert r._keep_slot(soon) == ""            # too close: post now
     assert r._keep_slot(later) == later        # kept exactly, no slot search
     assert r._reserved and r._reserved[-1][0].strftime("%Y-%m-%dT%H:%M:%SZ") == later
+
+
+def test_stream_watch_tiktok_end_clips_recording_once(tmp_path):
+    """TikTok LIVE ends while OBS still feeds Twitch/Kick: after the grace period the local recording goes to
+    the Inbox once; when Twitch ends later no VOD download starts and the ledger gets the broadcast length."""
+    import json as _json
+    from datetime import datetime, timedelta, timezone
+    from clipper.runner import Stages
+    from clipper.config import load_config
+    cfg = load_config({"SG_CLIPPER_LEDGER": str(tmp_path / "processed.json")})
+    st = Stages.__new__(Stages)
+    st.cfg = cfg
+    synced, finished, stopped = [], [], []
+    st.twitch_sync = lambda body: synced.append(body) or {"started": True}
+    st._rec_ensure = lambda state: state.setdefault("rec", {"parts": [], "pid": None})
+    st._rec_stop = lambda state: stopped.append(1)
+
+    def finish(state, reason):
+        finished.append(reason)
+        state["recorded_file"] = "live_rec_x.mp4"
+        return True
+    st._rec_finish = finish
+    tw = {"v": {"id": "s9", "started_at": "2026-11-12T03:25:44Z", "game": "Wardogs"}}
+    tt = {"v": True}
+    st._twitch_live = lambda channel: tw["v"]
+    st._tiktok_live = lambda user: tt["v"]
+    st.stream_watch({})
+    tt["v"] = False
+    st.stream_watch({})                                   # TikTok offline: grace clock starts
+    path = tmp_path / "stream_state.json"
+    state = _json.loads(path.read_text(encoding="utf-8"))
+    state["tiktok_off_since"] = (datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat()
+    path.write_text(_json.dumps(state), encoding="utf-8")
+    r = st.stream_watch({})
+    assert r["ended"] == "tiktok" and finished == ["TikTok LIVE ended"]
+    st.stream_watch({})
+    assert finished == ["TikTok LIVE ended"]               # once per broadcast
+    tw["v"] = None
+    st.stream_watch({})
+    state = _json.loads(path.read_text(encoding="utf-8"))
+    state["offline_since"] = (datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat()
+    state["last_seen"] = "2026-11-12T05:30:00+00:00"
+    path.write_text(_json.dumps(state), encoding="utf-8")
+    r = st.stream_watch({})
+    assert r["ended"] is True and not r["sync_started"] and synced == []
+    ledger = _json.loads((tmp_path / "twitch_vods.json").read_text(encoding="utf-8"))
+    assert abs(ledger["rec_s9"]["duration"] - (2 * 3600 + 4 * 60 + 16)) < 1
+
+
+def test_tiktok_live_parsing():
+    from clipper.runner import Stages
+    st = Stages.__new__(Stages)
+    st._http_json = lambda url, timeout=20: {"data": {"user": {"status": 2}, "liveRoom": {"status": 2}}}
+    assert st._tiktok_live("x") is True
+    st._http_json = lambda url, timeout=20: {"data": {"user": {"status": 4}, "liveRoom": {"status": 4}}}
+    assert st._tiktok_live("x") is False
+    def boom(url, timeout=20):
+        raise OSError("down")
+    st._http_json = boom
+    assert st._tiktok_live("x") is None                   # unreadable never counts as "ended"
