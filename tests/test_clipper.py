@@ -524,14 +524,18 @@ def test_stream_watch_tiktok_end_clips_recording_once(tmp_path):
     assert abs(ledger["rec_s9"]["duration"] - (2 * 3600 + 4 * 60 + 16)) < 1
 
 
-def test_tiktok_live_parsing():
+def test_tiktok_live_from_data_agent(tmp_path):
+    import json as _json, time as _t
     from clipper.runner import Stages
+    from clipper.config import load_config
     st = Stages.__new__(Stages)
-    st._http_json = lambda url, timeout=20: {"data": {"user": {"status": 2}, "liveRoom": {"status": 2}}}
+    st.cfg = load_config({"SG_CLIPPER_LEDGER": str(tmp_path / "processed.json")})
+    f = tmp_path / "stream_sessions.json"
+    st.cfg.DATA_AGENT_SESSIONS = f
+    assert st._tiktok_live("x") is None                                    # no file: unknown
+    f.write_text(_json.dumps({"current": {"samples": [[_t.time(), 9, {}, ["kick", "tiktok", "twitch"]]]}}))
     assert st._tiktok_live("x") is True
-    st._http_json = lambda url, timeout=20: {"data": {"user": {"status": 4}, "liveRoom": {"status": 4}}}
+    f.write_text(_json.dumps({"current": {"samples": [[_t.time(), 1, {}, ["kick", "twitch"]]]}}))
     assert st._tiktok_live("x") is False
-    def boom(url, timeout=20):
-        raise OSError("down")
-    st._http_json = boom
-    assert st._tiktok_live("x") is None                   # unreadable never counts as "ended"
+    f.write_text(_json.dumps({"current": {"samples": [[_t.time() - 600, 1, {}, ["kick"]]]}}))
+    assert st._tiktok_live("x") is None                                    # stale sample: unknown

@@ -32,6 +32,7 @@ class ClipperConfig:
     WORKING: Path = Path(r"C:\SmarterGamers\Clips\Working")
     READY: Path = Path(r"C:\SmarterGamers\Clips\Ready")
     RECORD_STREAMS: bool = True     # record the live stream locally (Kick playlist) so Shorts start at stream end
+    DATA_AGENT_SESSIONS: Path = Path(r"C:\Users\ultim\Desktop\Projects\HistoryView.org\Stream Graphics\stream_sessions.json")  # TikTok LIVE status
     LEDGER: Path = Path(r"C:\SmarterGamers\Clips\processed.json")
     RUN_LOG: Path = Path(r"C:\SmarterGamers\Clips\runs.jsonl")
 

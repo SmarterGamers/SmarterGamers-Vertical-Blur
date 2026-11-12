@@ -685,16 +685,22 @@ class Stages:
             return json.loads(r.read().decode("utf-8"))
 
     def _tiktok_live(self, user: str) -> Optional[bool]:
-        """True while ``user`` is LIVE on TikTok, False when not, None when TikTok can't be read (never "ended")."""
+        """True while TikTok LIVE is on, False when off, None when unknown (never read as "ended").
+
+        Source: the SmarterGamers Data Agent on this PC, which follows TikTok LIVE through TikFinity and writes
+        each sample (``[time, total, per_platform, live_platforms]``) to ``stream_sessions.json``. Only a fresh
+        sample (< 3 min) counts."""
+        path = Path(self.cfg.DATA_AGENT_SESSIONS)
         try:
-            d = self._http_json(f"https://www.tiktok.com/api-live/user/room/?aid=1988&uniqueId={user}&sourceType=54")
-        except Exception:  # noqa: BLE001
+            cur = (json.loads(path.read_text(encoding="utf-8")) or {}).get("current") or {}
+        except (OSError, ValueError):
             return None
-        data = d.get("data") or {}
-        if not data:
+        samples = cur.get("samples") or []
+        if not samples or not isinstance(samples[-1], list) or len(samples[-1]) < 4:
             return None
-        room = data.get("liveRoom") or {}
-        return int(room.get("status") or (data.get("user") or {}).get("status") or 0) == 2
+        if time.time() - float(samples[-1][0]) > 180:
+            return None
+        return "tiktok" in (samples[-1][3] or [])
 
     def _kick_playlist(self, channel: str) -> Optional[str]:
         """The live HLS playlist URL while ``channel`` is live on Kick (no ads, unlike Twitch for a viewer)."""
