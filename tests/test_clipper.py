@@ -539,3 +539,25 @@ def test_tiktok_live_from_data_agent(tmp_path):
     assert st._tiktok_live("x") is False
     f.write_text(_json.dumps({"current": {"samples": [[_t.time() - 600, 1, {}, ["kick"]]]}}))
     assert st._tiktok_live("x") is None                                    # stale sample: unknown
+
+
+def test_stream_watch_twitch_reconnect_is_same_broadcast(tmp_path):
+    """A Twitch reconnect gives a new stream id minutes later: same broadcast, recording and TikTok state kept."""
+    import json as _json
+    from clipper.runner import Stages
+    from clipper.config import load_config
+    st = Stages.__new__(Stages)
+    st.cfg = load_config({"SG_CLIPPER_LEDGER": str(tmp_path / "processed.json")})
+    synced = []
+    st.twitch_sync = lambda body: synced.append(body) or {"started": True}
+    st._tiktok_live = lambda user: True
+    st._rec_ensure = lambda state: state.setdefault("rec", {"parts": ["a.ts"], "pid": None})
+    st._rec_stop = lambda state: None
+    tw = {"v": {"id": "s1", "started_at": "2026-11-12T03:25:44Z"}}
+    st._twitch_live = lambda channel: tw["v"]
+    st.stream_watch({})
+    tw["v"] = {"id": "s2", "started_at": "2026-11-12T05:38:50Z"}
+    st.stream_watch({})
+    state = _json.loads((tmp_path / "stream_state.json").read_text(encoding="utf-8"))
+    assert state["stream_id"] == "s2" and state["stream_ids"] == ["s1"]
+    assert state["started_at"] == "2026-11-12T03:25:44Z" and state["rec"]["parts"] == ["a.ts"] and not synced

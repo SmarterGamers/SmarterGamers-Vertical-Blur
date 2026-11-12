@@ -828,9 +828,22 @@ class Stages:
         grace = self.STREAM_END_GRACE_MIN * 60
         if live:
             if state.get("stream_id") != live["id"]:
-                if state.get("rec"):
-                    self._rec_stop(state)              # a new broadcast: never keep writing the old one
-                state = {"stream_id": live["id"], "started_at": live["started_at"], "game": live.get("game")}
+                last = state.get("last_seen")
+                gap = (now - datetime.fromisoformat(last)).total_seconds() if last else 1e9
+                if state.get("live") and gap < 30 * 60:
+                    # Twitch reconnect (new stream id, same broadcast - Kick keeps one VOD): carry on with the
+                    # same recording / TikTok tracking instead of silently dropping the first part
+                    state.setdefault("stream_ids", []).append(state.get("stream_id"))
+                    state["stream_id"] = live["id"]
+                else:
+                    if state.get("live") and not state.get("clipped") and not body.get("dry_run"):
+                        # the previous broadcast ended unseen (runner down): still clip its VOD
+                        self._rec_stop(state)
+                        self.twitch_sync({"channel": channel, "max": 1, "rapid": True})
+                        result["sync_started"] = True
+                    elif state.get("rec"):
+                        self._rec_stop(state)          # a new broadcast: never keep writing the old one
+                    state = {"stream_id": live["id"], "started_at": live["started_at"], "game": live.get("game")}
             state.update(live=True, last_seen=now.isoformat(), offline_since=None)
             if live.get("game"):
                 state["game"] = live["game"]
