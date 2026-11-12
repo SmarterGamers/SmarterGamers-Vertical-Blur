@@ -7,6 +7,7 @@ Every failure raises :class:`OllamaError`; callers decide how to degrade (they n
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Optional
@@ -96,6 +97,11 @@ def verdict_for_candidate(base_url: str, model: str, candidate: Dict[str, Any],
     )
     out = chat_json(base_url, model, VERDICT_SYSTEM, user, timeout)
     title = str(out.get("title", "")).strip()
+    # the model keeps reaching for "Live Stream ..." filler even when told not to: swap in the game's name
+    if re.search(r"\blive[\s-]*stream\b", title, re.I):
+        g = game or "Gameplay"
+        title = re.sub(r"\b(in|on|during)\s+(the\s+|a\s+)?live[\s-]*stream\b", f"in {g}", title, flags=re.I)
+        title = re.sub(r"\s{2,}", " ", re.sub(r"\b(the\s+|a\s+)?live[\s-]*stream\b", g, title, flags=re.I)).strip()
     return {
         "verdict": str(out.get("verdict", "")).strip(),
         "fix": str(out.get("fix", "")).strip(),

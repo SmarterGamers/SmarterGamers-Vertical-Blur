@@ -78,11 +78,20 @@ class Ledger:
             return self._read()
 
 
+_RUN_LOG_LOCK = threading.Lock()
+
+
 def append_run_log(path: Path, record: Dict[str, Any]) -> None:
-    """Appends one JSON line to RUN_LOG (creating parent folders as needed)."""
+    """Appends one JSON line to RUN_LOG (creating parent folders as needed).
+
+    Serialised with a lock and written as one bytes call: n8n logs all of a job's Shorts at the same moment,
+    and six concurrent text-mode appends of ~60 KB lines interleaved into a corrupt line (Nov 12)."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     rec = dict(record)
     rec.setdefault("logged_at", time.strftime("%Y-%m-%dT%H:%M:%S"))
-    with open(path, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    data = (json.dumps(rec, ensure_ascii=False) + "\n").encode("utf-8")
+    with _RUN_LOG_LOCK:
+        with open(path, "ab") as fh:
+            fh.write(data)
+            fh.flush()

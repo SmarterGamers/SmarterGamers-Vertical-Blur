@@ -561,3 +561,22 @@ def test_stream_watch_twitch_reconnect_is_same_broadcast(tmp_path):
     state = _json.loads((tmp_path / "stream_state.json").read_text(encoding="utf-8"))
     assert state["stream_id"] == "s2" and state["stream_ids"] == ["s1"]
     assert state["started_at"] == "2026-11-12T03:25:44Z" and state["rec"]["parts"] == ["a.ts"] and not synced
+
+
+def test_verdict_title_drops_live_stream_filler(monkeypatch):
+    from clipper import llm
+    monkeypatch.setattr(llm, "chat_json", lambda *a, **k: {"title": "Live Stream Chaos Unfolds"})
+    assert llm.verdict_for_candidate("x", "m", {"start": 0, "end": 30}, game="WARDOGS")["title"] == "WARDOGS Chaos Unfolds"
+    monkeypatch.setattr(llm, "chat_json", lambda *a, **k: {"title": "Triple Kill in Live Stream"})
+    assert llm.verdict_for_candidate("x", "m", {"start": 0, "end": 30}, game="Battlefield")["title"] == "Triple Kill in Battlefield"
+
+
+def test_run_log_concurrent_appends_stay_valid(tmp_path):
+    import json as _json, threading as _th
+    from clipper.ledger import append_run_log
+    p = tmp_path / "runs.jsonl"
+    big = "x" * 60000
+    ts = [_th.Thread(target=append_run_log, args=(p, {"i": i, "blob": big})) for i in range(12)]
+    [t.start() for t in ts]; [t.join() for t in ts]
+    rows = [_json.loads(l) for l in p.read_text(encoding="utf-8").splitlines()]
+    assert sorted(r["i"] for r in rows) == list(range(12))

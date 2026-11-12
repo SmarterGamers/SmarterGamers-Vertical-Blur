@@ -297,6 +297,15 @@ class Stages:
         game, shooter = guess_game(str(body.get("game") or ""))
         if not game:   # the job id keeps the source file name, e.g. yt_..._PS1_NHL2001_min3_nocam_<stamp>
             game, shooter = guess_game(job_dir.name)
+        if not game and job_dir.name.lower().startswith("live_"):
+            # a just-ended stream: Kick VOD titles don't name the game, but Twitch's category does
+            try:
+                st_game = json.loads((self.cfg.LEDGER.parent / "stream_state.json").read_text(
+                    encoding="utf-8")).get("game") or ""
+            except (OSError, ValueError):
+                st_game = ""
+            game, shooter = guess_game(st_game)
+            game = game or st_game.title()
         out = []
         for c in cands:
             cc = dict(c)
