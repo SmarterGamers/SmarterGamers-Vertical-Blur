@@ -335,11 +335,19 @@ class Poster:
         todo = pending(queue, posted, platforms)
         if not todo:
             return 0
+        # newest Shorts first (a backlog after an outage shouldn't push today's posts back), and a gap between
+        # videos so a backlog doesn't hit TikTok/Facebook as a burst (SOCIAL_GAP_MIN, default 6)
+        todo.sort(key=lambda t: str(t[0].get("publish_at") or "9999"), reverse=True)
+        gap = float(os.environ.get("SOCIAL_GAP_MIN", "6")) * 60
         self.open()
         done = 0
+        last_vid = None
         try:
             page = self.page()
             for it, platform in todo:
+                if last_vid and it["video_id"] != last_vid and done and not self.dry_run:
+                    page.wait_for_timeout(int(gap * 1000))
+                last_vid = it["video_id"]
                 clip = Path(str(it["output"]))
                 key = f"{it['video_id']}:{platform}"
                 rec = posted.get(key) or {"attempts": 0}
