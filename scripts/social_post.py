@@ -83,6 +83,10 @@ def build_caption(title: str, source: str = "", platform: str = "tiktok") -> str
         if filler not in tags:
             tags.append(filler)
     tags = tags[:4] + (["#smartergamers"] if "#smartergamers" not in tags[:4] else [tags[4]])
+    # older AI titles lean on "Live Stream" filler ("Grenade Detected in Live Stream"): name the game instead
+    g = game or "Gameplay"
+    t = re.sub(r"\b(in|on|during)\s+(the\s+|a\s+)?live[\s-]*stream\b", f"in {g}", t, flags=re.I)
+    t = re.sub(r"\s{2,}", " ", re.sub(r"\b(the\s+|a\s+)?live[\s-]*stream\b", g, t, flags=re.I)).strip()
     desc = (f"Straight from the {game} stream. " if game else "Straight from the stream. ") + \
         "Live on TikTok, Twitch & Kick."
     return f"{t}\n{desc}\n{' '.join(tags[:5])}"
