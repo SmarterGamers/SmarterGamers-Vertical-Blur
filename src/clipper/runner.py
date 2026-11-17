@@ -957,7 +957,7 @@ class Stages:
                     continue
             seen.add(vid)
             out.append({"video_id": vid, "url": posted.get("url"), "title": posted.get("title"),
-                        "publish_at": pub, "job_id": rec.get("job_id"), "rank": (rec.get("approved") or {}).get("rank"),
+                        "publish_at": pub, "job_id": rec.get("job_id"), "rank": self._approved(rec).get("rank"),
                         "output": rec.get("output"), "source": os.path.splitext(str(rec.get("input") or "").replace("\\", "/").rsplit("/", 1)[-1])[0]})
         queued = 0
         if out and not body.get("dry_run"):
@@ -968,6 +968,21 @@ class Stages:
             if self.cfg.SOCIAL_CROSSPOST:
                 queued = self._queue_social(out)
         return {"live": out, "social_queued": queued}
+
+    @staticmethod
+    def _approved(rec: Dict[str, Any]) -> Dict[str, Any]:
+        """``approved`` is a dict from n8n, but backfilled rows can carry its str() form (or a note)."""
+        ap = rec.get("approved")
+        if isinstance(ap, dict):
+            return ap
+        if isinstance(ap, str) and ap.startswith("{"):
+            import ast
+            try:
+                v = ast.literal_eval(ap)
+                return v if isinstance(v, dict) else {}
+            except (ValueError, SyntaxError):
+                return {}
+        return {}
 
     def _queue_social(self, items: List[Dict[str, Any]]) -> int:
         """Hands just-live Shorts to scripts/social_post.py (TikTok + Facebook) via <Clips>/social_queue.json."""

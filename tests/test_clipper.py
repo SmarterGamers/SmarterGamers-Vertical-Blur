@@ -580,3 +580,11 @@ def test_run_log_concurrent_appends_stay_valid(tmp_path):
     [t.start() for t in ts]; [t.join() for t in ts]
     rows = [_json.loads(l) for l in p.read_text(encoding="utf-8").splitlines()]
     assert sorted(r["i"] for r in rows) == list(range(12))
+
+
+def test_approved_tolerates_string_rows():
+    from clipper.runner import Stages
+    assert Stages._approved({"approved": {"rank": 2}}) == {"rank": 2}
+    assert Stages._approved({"approved": "{'rank': 3, 'start': 1.0}"})["rank"] == 3
+    assert Stages._approved({"approved": "(row rebuilt)"}) == {}
+    assert Stages._approved({}) == {}
